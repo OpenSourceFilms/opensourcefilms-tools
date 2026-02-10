@@ -1,0 +1,66 @@
+# Operational logs + runstate
+logs.all/
+logs/
+runstate/
+
+# Virtual envs
+venv/
+venv_embed/
+venv_embed_cpu/
+.venv/
+env/
+
+# Third-party deps (keep out of repo for now)
+third_party/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Big local dumps / archives / backups
+FULL_AUDIT_DUMP.txt
+CANDIDATE_FILES.txt
+_backup_archive_*.tar.gz
+_cleanup_*/
+_archived_backups_*/
+MASTER_BAK/
+audit/
+
+# Local models / binaries
+models/
+*.bin
+
+# Generated / scratch markers (accidental files)
+--*
+PY
+count
+count=*
+idx
+idx=*
+if
+import
+rms=*
+s2
+s2=*
+step_*
+wav_path
+while
+win_*
+
+# Backup/copy files
+*Copy*
+*.bak_*
+
+# Python cruft
+__pycache__/
+*.pyc
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Junk zero-byte / accidental files seen in-tree
+bin/python
+bin/open-clip-torch==*
+bin/2n

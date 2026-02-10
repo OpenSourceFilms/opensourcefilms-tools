@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+BIN="/workspace/pipeline/third_party/whisper.cpp/build/bin/whisper-cli"
+MODEL_DEFAULT="/workspace/pipeline/models/whispercpp/ggml-small.en.bin"
+
+if [[ ! -x "$BIN" ]]; then
+  echo "ERROR: whisper.cpp binary not executable: $BIN" >&2
+  exit 2
+fi
+
+# Pass-through convenience wrapper.
+# If caller did not specify -m, inject default model (MODEL env overrides).
+MODEL="${WHISPER_MODEL:-$MODEL_DEFAULT}"
+
+args=("$@")
+has_model=0
+for a in "${args[@]}"; do
+  if [[ "$a" == "-m" || "$a" == "--model" ]]; then
+    has_model=1
+    break
+  fi
+done
+
+if [[ $has_model -eq 0 ]]; then
+  exec "$BIN" -m "$MODEL" "${args[@]}"
+else
+  exec "$BIN" "${args[@]}"
+fi

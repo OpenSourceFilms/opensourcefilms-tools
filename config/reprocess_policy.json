@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "notes": "Non-canonical config. Enforces explicit artifact_fingerprint matching for upgraded stages. Stages not listed are not fingerprint-enforced yet.",
+  "required_fingerprints": {
+    "B1": {
+      "schema_version": 1,
+      "stage": "B1",
+      "producer": "stageB1_embed_e5_onnx.py",
+      "producer_sha256": "bb30dcc169a6f5d8752d27f21663558c186effb79bb058a1c92dcee5730e5e23",
+      "fingerprint_id": "stageB1_embed_e5_onnx",
+      "fingerprint_version": "2026-02-02.1",
+      "config_sha256": "25a8a0b21ad23d8395f11ec055225717d9dee06d0788fc5e33c85f49037031cd"
+    },
+    "E0": {
+      "schema_version": 1,
+      "stage": "E0",
+      "producer": "stageE0_events.py",
+      "producer_sha256": "a480c63ed852c9e2fb25ba401e41bd4c1cba8200952270c440253ed465301d1a",
+      "fingerprint_id": "stageE0_events_text_first_v1",
+      "fingerprint_version": "2026-02-02.1",
+      "config_sha256": "4f991fe193172b98f5f7ab6730091ee62003cf7a8bc69333f2d0c0749cde031b"
+    },
+    "F0": {
+      "schema_version": 1,
+      "stage": "F0",
+      "producer": "stageF0_entities.py",
+      "producer_sha256": "b4fcb4559d58ef3465d541e590b6fd5a7240a92114053158e597b35a7f62ddcb",
+      "fingerprint_id": "stageF0_entities_rules_v1",
+      "fingerprint_version": "2026-02-02.1",
+      "config_sha256": "395ff02fa77091699707caeb1d9b9904038f10a27953033399f975f2f827c246"
+    }
+  }
+}

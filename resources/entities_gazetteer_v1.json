@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "gazetteer_id": "entities_gazetteer_v1",
+  "match": {
+    "case_insensitive": true,
+    "word_boundaries": true
+  },
+  "types": {
+    "PERSON": [
+      "Daniel",
+      "Terrence"
+    ],
+    "WORK_OF_ART": [
+      "Dr. Strange"
+    ],
+    "PROP": [
+      "portal",
+      "pentagram",
+      "shockwave",
+      "chromatic aberration",
+      "digi-doubles"
+    ],
+    "OBJECT": [
+      "rope",
+      "beams"
+    ],
+    "EVENT": [],
+    "ORG": [],
+    "GPE": [],
+    "LOC": []
+  },
+  "notes": {
+    "purpose": "Deterministic phrase matches to supplement rules-based entity extraction. Keep it small and production-specific.",
+    "guidance": "Add exact phrases as they appear in transcripts. Prefer full names. Avoid overly generic words unless explicitly a PROP/OBJECT term in your production context.",
+    "versioning": "gazetteer_id stays stable for this session. The pipeline hashes this file into provenance, so changes are visible without renaming."
+  }
+}

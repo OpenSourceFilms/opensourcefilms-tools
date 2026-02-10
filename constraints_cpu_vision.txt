@@ -1,0 +1,7 @@
+# cpu_vision constraints: prevent backtracking/regressions
+numpy==2.2.6
+opencv-python-headless==4.12.0.88
+scipy==1.14.1
+pandas==2.2.3
+pillow==10.4.0
+scikit-image==0.25.2

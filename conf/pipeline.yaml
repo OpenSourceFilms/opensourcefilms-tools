@@ -1,0 +1,62 @@
+schema_version: 1
+
+paths:
+  ingest_root: /workspace/ingest
+  catalog_root: /workspace/catalog
+  state_root: /workspace/state
+  index_root: /workspace/index
+  tmp_root: /workspace/tmp
+
+resolve:
+  media_root_token: "$MEDIA_ROOT"
+  use_relative_paths: true
+
+cpu:
+  scan_interval_seconds: 60
+  debounce_seconds: 10
+  stable_window_seconds: 30
+
+  scene_detection:
+    default_detector: adaptive
+    adaptive:
+      threshold_ratio: 3.0
+      min_content_value: 15.0
+    content_fallback:
+      threshold: 27.0
+
+  asr:
+    engine: whispercpp
+    whispercpp:
+      bin: /workspace/pipeline/bin/asr_whispercpp.sh
+      model: /workspace/pipeline/models/whispercpp/ggml-small.en.bin
+      threads: 4
+      output_formats: [srt, vtt]
+      time_budget_seconds: 900
+
+  keyframes:
+    frames_per_chunk: 12
+
+gpu:
+  model_profile_default: vlm_standard
+  moments_per_chunk_max: 3
+
+  moment_lengths_seconds:
+    short: [6, 18]
+    mid: [18, 45]
+    long: [45, 120]
+
+  confidence:
+    upsert_threshold: 0.75
+    high: 0.85
+    review_low: 0.70
+
+embeddings:
+  model_name: bge-text-embedding
+  dimension: 1024
+  cache_path: /workspace/index/embed_cache
+
+exports:
+  marker_csv: true
+  subtitles: true
+  otio: true
+  intelliscript: true
