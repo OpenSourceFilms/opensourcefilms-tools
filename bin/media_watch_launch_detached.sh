@@ -1,6 +1,3 @@
-cd /workspace/opensourcefilms-tools || exit 1
-
-cat > bin/media_watch_launch_detached.sh <<'EOF'
 #!/usr/bin/env bash
 set -o pipefail
 umask 022
@@ -62,8 +59,6 @@ ensure_dirs() {
 bootstrap_contract_surfaces() {
   heartbeat_file="${LOGROOT}/_latest/heartbeat.json"
   manifest_file="${LOGROOT}/manifest/latest.json"
-  now_utc=""
-  tmp=""
 
   mkdir -p "${LOGROOT}/_latest" "${LOGROOT}/manifest"
 
@@ -201,4 +196,3 @@ case "${1:-}" in
     exit 2
     ;;
 esac
-EOF
