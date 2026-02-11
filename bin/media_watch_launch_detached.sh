@@ -1,3 +1,6 @@
+cd /workspace/opensourcefilms-tools || exit 1
+
+cat > bin/media_watch_launch_detached.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 umask 022
@@ -14,7 +17,6 @@ MW_RUNSTATE="${MW_ROOT}/runstate"
 
 PIDFILE="${MW_RUNSTATE}/media_watch.pid"
 LOGFILE="${MW_RUNSTATE}/media_watch.log"
-NOHUP_OUT="${MW_RUNSTATE}/media_watch.nohup"
 
 PY="/workspace/venvs/cpu/bin/python"
 DAEMON="/workspace/pipeline/bin/media_watch_daemon.py"
@@ -57,6 +59,43 @@ ensure_dirs() {
   chmod 755 "$LOGROOT" "$MW_ROOT" "$MW_RUNS" "$MW_SCANS" "$MW_STAGE_LOGS" "$MW_RUNSTATE" 2>/dev/null || true
 }
 
+bootstrap_contract_surfaces() {
+  local heartbeat_file="${LOGROOT}/_latest/heartbeat.json"
+  local manifest_file="${LOGROOT}/manifest/latest.json"
+  local now_utc
+  local tmp
+
+  mkdir -p "${LOGROOT}/_latest" "${LOGROOT}/manifest"
+
+  if [[ ! -f "$heartbeat_file" ]]; then
+    now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    tmp="$(mktemp "${heartbeat_file}.tmp.XXXXXX")"
+    cat >"$tmp" <<EJSON
+{
+  "record_type": "heartbeat",
+  "schema_version": 1,
+  "status": "bootstrap",
+  "updated_utc": "${now_utc}"
+}
+EJSON
+    mv -f "$tmp" "$heartbeat_file"
+  fi
+
+  if [[ ! -f "$manifest_file" ]]; then
+    now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    tmp="$(mktemp "${manifest_file}.tmp.XXXXXX")"
+    cat >"$tmp" <<EJSON
+{
+  "record_type": "manifest_latest",
+  "schema_version": 1,
+  "status": "bootstrap",
+  "updated_utc": "${now_utc}"
+}
+EJSON
+    mv -f "$tmp" "$manifest_file"
+  fi
+}
+
 read_pid() {
   if [[ -f "$PIDFILE" ]]; then
     cat "$PIDFILE" 2>/dev/null || true
@@ -71,6 +110,7 @@ pid_is_running() {
 cmd_start() {
   assert_no_legacy_writes
   ensure_dirs
+  bootstrap_contract_surfaces
 
   local pid
   pid="$(read_pid)"
@@ -83,7 +123,6 @@ cmd_start() {
   # Clean stale pidfile if present
   rm -f "$PIDFILE" 2>/dev/null || true
 
-  # terminal-independent
   nohup "$PY" "$DAEMON" \
     --watch "$WATCH_DIR" \
     --policy "$POLICY" \
@@ -92,8 +131,8 @@ cmd_start() {
     --max-per-scan "$MAX_PER_SCAN" \
     --publish-stageC \
     --state "${MW_RUNSTATE}/media_watch_state.json" \
-    --log "${MW_RUNSTATE}/media_watch.log" \
-    >>"$NOHUP_OUT" 2>&1 &
+    --log "$LOGFILE" \
+    >/dev/null 2>&1 &
 
   pid=$!
   echo "$pid" > "$PIDFILE"
@@ -101,8 +140,7 @@ cmd_start() {
   echo "started pid=$pid"
   echo "logroot=$LOGROOT"
   echo "pidfile=$PIDFILE"
-  echo "daemon_log=${MW_RUNSTATE}/media_watch.log"
-  echo "nohup_out=$NOHUP_OUT"
+  echo "daemon_log=$LOGFILE"
 }
 
 cmd_status() {
@@ -166,3 +204,4 @@ case "${1:-}" in
     exit 2
     ;;
 esac
+EOF
