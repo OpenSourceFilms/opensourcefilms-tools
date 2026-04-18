@@ -1,0 +1,48 @@
+# Core framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# Database
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Task queue
+dramatiq[redis]==1.17.0
+redis==5.2.1
+
+# Object store
+boto3==1.36.7
+
+# Media processing
+ffmpeg-python==0.2.0
+opencv-python-headless==4.10.0.84
+imagehash==4.3.1
+Pillow==11.1.0
+
+# ASR fallback (CPU-safe)
+faster-whisper==1.1.0
+soundfile==0.12.1
+
+# Language detection
+langdetect==1.0.9
+
+# Shot detection fallback
+scenedetect==0.6.4
+
+# Qdrant
+qdrant-client==1.12.2
+
+# Utilities
+httpx==0.28.1
+aiofiles==24.1.0
+python-multipart==0.0.20
+
+# ── GPU-only (install on GPU pod, not CPU pod) ──────────────────
+# paddlepaddle-gpu  (install separately: pip install paddlepaddle-gpu)
+# paddleocr==2.8.1
+# nemo_toolkit[asr]
+# pyannote.audio==3.3.2
+# insightface==0.7.3

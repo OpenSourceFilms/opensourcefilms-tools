@@ -1,0 +1,25 @@
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-dev python3-pip ffmpeg libgl1 libglib2.0-0 && \
+    rm -rf /var/lib/apt/lists/* && \
+    ln -sf python3.11 /usr/bin/python3 && ln -sf python3 /usr/bin/python
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# GPU-specific deps
+RUN pip install --no-cache-dir \
+    paddlepaddle-gpu \
+    "paddleocr>=2.8" \
+    "nemo_toolkit[asr]" \
+    "pyannote.audio==3.3.2" \
+    insightface
+
+COPY . .
+
+ENV PYTHONPATH=/app
+
+# Run Dramatiq worker on GPU queues
+CMD ["python", "-m", "dramatiq", "workers", "--queues", "ingest_gpu", "--processes", "1", "--threads", "2"]
