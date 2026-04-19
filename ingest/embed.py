@@ -251,14 +251,18 @@ def embed_asset(asset_id: str):
 
 
 def _enqueue_enrichment(asset_id: str):
-    """Enqueue stages 6a, 6b, 6c on the ingest queue."""
-    from workers.rq_config import ingest_queue
+    """
+    Enqueue enrichment stages after embedding completes.
+      6a (faces)      → ingest queue   (pipeline-v2 venv, InsightFace)
+      6b (objects)    → objects queue  (groundingdino venv, transformers 4.37)
+      6c (shot_meta)  → ingest queue   (pipeline-v2 venv, CPU-only)
+    """
+    from workers.rq_config import ingest_queue, objects_queue
     from ingest.faces import detect_faces
-    from ingest.objects import detect_objects
     from ingest.shot_meta import compute_shot_metadata
 
     ingest_queue.enqueue(detect_faces, asset_id, job_timeout=3600)
-    ingest_queue.enqueue(detect_objects, asset_id, job_timeout=3600)
+    objects_queue.enqueue("ingest.objects.detect_objects", asset_id, job_timeout=3600)
     ingest_queue.enqueue(compute_shot_metadata, asset_id, job_timeout=1800)
     logger.info("[embed] enqueued enrichment stages for asset_id=%s", asset_id)
 

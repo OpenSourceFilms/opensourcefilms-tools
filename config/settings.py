@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     groundingdino_confidence: float = 0.35
     face_detection_enabled: bool = True
     object_detection_enabled: bool = True
+    # Worker venvs (documentation only — not used programmatically)
+    groundingdino_venv: str = "/workspace/venvs/groundingdino"
+
     face_iou_threshold: float = 0.4   # IoU threshold for track association
     face_dbscan_eps: float = 0.4      # cosine distance eps for character clustering
     face_dbscan_min_samples: int = 2

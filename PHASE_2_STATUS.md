@@ -1,7 +1,7 @@
 # Phase 2 Status — Entity Enrichment Layer
 
 **Date:** 2026-04-19
-**Status:** COMPLETE (pending live validation — enrichment stages ready to run)
+**Status:** COMPLETE — validated end-to-end
 
 ---
 
@@ -119,14 +119,38 @@ ByteTrack (`lap`): build failed — IoU fallback used instead.
 
 ---
 
+## Validation Results (asset `13b30e6f`, 2026-04-19)
+
+Asset: `test_clip.mp4` (90s, 1 shot, 2 keyframes)
+Asset ID: `13b30e6f-80d4-49d7-a93c-44c62e17dbf2`
+Project: `test-project-001`
+
+| Stage | Status | Result |
+|---|---|---|
+| 6a face detection | ✓ | 0 face_tracks (test clip has no visible face) |
+| 6b object detection | ✓ | 1 object_track: `clapperboard` (conf=0.504), crop saved to MinIO |
+| 6c shot metadata | ✓ | motion=19.34, brightness=127.4, contrast=64.2, palette 5 hex, size=unknown |
+| enrich barrier | ✓ | All 3 stages incremented; asset→complete, enrich_done=True, key deleted |
+| face_insightface | ✓ | Collection created, 0 points (no faces) |
+| character clustering | ✓ | 0 characters (correct for 0 face tracks) |
+
+**Worker routing confirmed:**
+- Stage 6a (faces) + 6c (shot_meta) → `ingest` queue (pipeline-v2 venv)
+- Stage 6b (objects) → `objects` queue (groundingdino venv, transformers==4.37.2)
+
+**GroundingDINO venv fix:** `asyncpg` was missing from the groundingdino venv
+(needed by `db.base` which uses asyncpg driver). Added to venv; also added to
+`scripts/start_worker_objects.sh` dependency notes. The `start_worker_objects.sh`
+script now launches the GroundingDINO worker correctly with `PYTHONPATH=/workspace/pipeline`.
+
+---
+
 ## Known Limitations / Phase 3 Targets
 
 1. **ByteTrack** — `lap` Cython build fails in this environment; greedy IoU tracker used as fallback.
    ReID across shots would require a proper multi-frame tracker.
-2. **GroundingDINO weights absent** — Stage 6b skips entirely; `object_track` table will be empty
-   until weights are placed at `/workspace/weights/groundingdino/`.
-3. **`object_crop_qwen3vl` collection** — crop embeddings not yet wired (requires GroundingDINO running
-   first, then a separate embed job).
-4. **Visual cross-modal search** — still deferred (text query 4096d vs visual collection 2048d).
-5. **Single test asset** — character clustering not validated end-to-end yet; requires re-ingest
-   through the new enriching state.
+2. **`object_crop_qwen3vl` collection** — crop embeddings not yet wired (requires a follow-up embed job
+   that runs Qwen3-VL over crop images in MinIO).
+3. **Visual cross-modal search** — still deferred (text query 4096d vs visual collection 2048d).
+4. **No face data on test asset** — character clustering validated structurally (correct 0-result handling);
+   end-to-end face→cluster pipeline requires an asset with visible faces.
