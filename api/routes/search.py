@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from config.settings import settings
 from db.base import AsyncSessionLocal
-from db.models import Asset, Shot, Keyframe, TranscriptTurn, Scene
+from db.models import Asset, Shot, Keyframe, TranscriptTurn, Scene, FaceTrack, ObjectTrack
 import store.client as store
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,12 @@ class SearchFilters(BaseModel):
     asset_ids: list[str] = []
     shot_size_class: Optional[str] = None
     min_duration_s: Optional[float] = None
+    # Phase 2 filters
+    character_ids: list[str] = []      # shots where any of these characters appear
+    object_labels: list[str] = []      # shots where any of these object labels appear
+    motion_score_min: Optional[float] = None
+    motion_score_max: Optional[float] = None
+    palette_hex: list[str] = []        # stub — future nearest-colour filter
 
 
 class SearchRequest(BaseModel):
@@ -201,6 +207,28 @@ async def _build_results(shot_ids: list[str], scores: dict, project_id: str, req
         )
         shots = {s.id: s for s in shots_result.scalars().all()}
 
+        # Pre-fetch face track character memberships if needed
+        char_shot_ids: set[str] | None = None
+        if req.filters.character_ids:
+            ft_result = await db.execute(
+                select(FaceTrack.shot_id).where(
+                    FaceTrack.character_id.in_(req.filters.character_ids),
+                    FaceTrack.deleted_at.is_(None),
+                )
+            )
+            char_shot_ids = {row[0] for row in ft_result.all()}
+
+        # Pre-fetch object track label memberships if needed
+        obj_shot_ids: set[str] | None = None
+        if req.filters.object_labels:
+            ot_result = await db.execute(
+                select(ObjectTrack.shot_id).where(
+                    ObjectTrack.label.in_(req.filters.object_labels),
+                    ObjectTrack.deleted_at.is_(None),
+                )
+            )
+            obj_shot_ids = {row[0] for row in ot_result.all()}
+
         # Filter by shot constraints
         valid_shot_ids = []
         for sid in shot_ids:
@@ -210,6 +238,18 @@ async def _build_results(shot_ids: list[str], scores: dict, project_id: str, req
             if req.filters.shot_size_class and shot.shot_size_class != req.filters.shot_size_class:
                 continue
             if req.filters.min_duration_s and (shot.end_pts - shot.start_pts) < req.filters.min_duration_s:
+                continue
+            if req.filters.motion_score_min is not None and (
+                shot.motion_score is None or shot.motion_score < req.filters.motion_score_min
+            ):
+                continue
+            if req.filters.motion_score_max is not None and (
+                shot.motion_score is None or shot.motion_score > req.filters.motion_score_max
+            ):
+                continue
+            if char_shot_ids is not None and sid not in char_shot_ids:
+                continue
+            if obj_shot_ids is not None and sid not in obj_shot_ids:
                 continue
             valid_shot_ids.append(sid)
 

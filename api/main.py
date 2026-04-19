@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.routes import projects, assets, health, queue_status, search
+from api.routes import projects, assets, health, queue_status, search, characters
 
 logging.basicConfig(
     level="INFO",
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Media Evidence Retrieval API",
-    version="0.1.0",
-    description="Phase 1 — ingest + multi-surface semantic search",
+    version="0.2.0",
+    description="Phase 2 — ingest + multi-surface semantic search + entity enrichment",
 )
 
 app.add_middleware(
@@ -35,6 +35,7 @@ app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(assets.router, prefix="/projects", tags=["assets"])
 app.include_router(queue_status.router, prefix="/queue", tags=["queue"])
 app.include_router(search.router, prefix="/projects", tags=["search"])
+app.include_router(characters.router, prefix="", tags=["characters"])
 
 
 @app.on_event("startup")

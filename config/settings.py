@@ -52,6 +52,19 @@ class Settings(BaseSettings):
     # Embedding
     embed_batch_size: int = 8
 
+    # Phase 2: entity detection
+    insightface_root: str = "/workspace/weights/insightface"
+    insightface_model: str = "buffalo_l"
+    groundingdino_weights: str = "/workspace/weights/groundingdino/groundingdino_swint_ogc.pth"
+    groundingdino_config: str = "/workspace/weights/groundingdino/GroundingDINO_SwinT_OGC.py"
+    groundingdino_default_labels: str = "person . camera . microphone . monitor . clapperboard"
+    groundingdino_confidence: float = 0.35
+    face_detection_enabled: bool = True
+    object_detection_enabled: bool = True
+    face_iou_threshold: float = 0.4   # IoU threshold for track association
+    face_dbscan_eps: float = 0.4      # cosine distance eps for character clustering
+    face_dbscan_min_samples: int = 2
+
     # Embedding dims (verified against actual model output)
     qwen3_vl_dim: int = 2048   # Qwen3-VL-Embedding-2B (fallback: siglip=1152)
     qwen3_text_dim: int = 4096  # Qwen3-Embedding-8B (fallback: bge-m3=1024)

@@ -2,7 +2,8 @@
 Stage 5: embed_asset
 Embeds keyframes (visual), sentences+turns (text), OCR spans.
 Writes vectors to Qdrant. Updates qdrant_point_id on PG rows.
-Advances asset state: embedding → complete.
+Advances asset state: embedding → enriching, then enqueues stages 6a/6b/6c.
+Final transition to complete is handled by the enrich barrier in faces.py.
 
 Models (with fallbacks):
   Visual: Qwen3-VL-Embedding-2B (2048d) → google/siglip-so400m-patch14-384 (1152d)
@@ -227,10 +228,10 @@ def embed_asset(asset_id: str):
             _run_ocr_embed(db, asset_id, asset.project_id)
 
             asset = db.query(Asset).filter(Asset.id == asset_id).first()
-            asset.ingest_state = "complete"
+            asset.ingest_state = "enriching"
             asset.ingest_error = None
             db.commit()
-            logger.info("[embed] done asset_id=%s → state=complete", asset_id)
+            logger.info("[embed] done asset_id=%s → state=enriching, enqueueing 6a/6b/6c", asset_id)
 
         except Exception as exc:
             logger.exception("[embed] failed asset_id=%s", asset_id)
@@ -244,6 +245,22 @@ def embed_asset(asset_id: str):
             except Exception:
                 pass
             raise
+
+    # Enqueue enrichment stages outside the DB session
+    _enqueue_enrichment(asset_id)
+
+
+def _enqueue_enrichment(asset_id: str):
+    """Enqueue stages 6a, 6b, 6c on the ingest queue."""
+    from workers.rq_config import ingest_queue
+    from ingest.faces import detect_faces
+    from ingest.objects import detect_objects
+    from ingest.shot_meta import compute_shot_metadata
+
+    ingest_queue.enqueue(detect_faces, asset_id, job_timeout=3600)
+    ingest_queue.enqueue(detect_objects, asset_id, job_timeout=3600)
+    ingest_queue.enqueue(compute_shot_metadata, asset_id, job_timeout=1800)
+    logger.info("[embed] enqueued enrichment stages for asset_id=%s", asset_id)
 
 
 def _run_visual_embed(db, asset_id: str, project_id: str):

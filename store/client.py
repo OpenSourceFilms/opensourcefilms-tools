@@ -9,7 +9,7 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-BUCKETS = ["media-originals", "media-proxies", "media-keyframes", "exports"]
+BUCKETS = ["media-originals", "media-proxies", "media-keyframes", "media-crops", "exports"]
 
 
 def _s3():

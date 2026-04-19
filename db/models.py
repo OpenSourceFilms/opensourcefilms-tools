@@ -73,6 +73,7 @@ class Asset(TimestampMixin, Base):
     ingest_error: Mapped[Optional[str]] = mapped_column(Text)
     asr_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     ocr_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    enrich_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     shot_count: Mapped[Optional[int]] = mapped_column(Integer)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
 
@@ -264,6 +265,85 @@ class EmbeddingModelVersion(Base):
     __table_args__ = (
         UniqueConstraint("model_name", "model_version", "surface"),
     )
+
+# ── Phase 2: entity layer ─────────────────────────────────────────────────────
+
+class Character(TimestampMixin, Base):
+    __tablename__ = "character"
+
+    project_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("project.id"), nullable=False
+    )
+    name: Mapped[Optional[str]] = mapped_column(Text)
+    cluster_label: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    face_tracks: Mapped[List["FaceTrack"]] = relationship("FaceTrack", back_populates="character")
+
+    __table_args__ = (Index("idx_character_project", "project_id"),)
+
+
+class FaceTrack(Base):
+    __tablename__ = "face_track"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, server_default=func.now(),
+                                                  onupdate=func.now(), nullable=False)
+    producer_model: Mapped[str] = mapped_column(Text, nullable=False)
+    producer_version: Mapped[str] = mapped_column(Text, nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+
+    shot_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("shot.id"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("asset.id"), nullable=False)
+    track_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_pts: Mapped[float] = mapped_column(Float, nullable=False)
+    end_pts: Mapped[float] = mapped_column(Float, nullable=False)
+    bbox_series: Mapped[Optional[list]] = mapped_column(JSONB)
+    embedding: Mapped[Optional[List[float]]] = mapped_column(ARRAY(Float))
+    character_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("character.id")
+    )
+    confidence: Mapped[Optional[float]] = mapped_column(Float)
+    qdrant_point_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
+
+    character: Mapped[Optional["Character"]] = relationship("Character", back_populates="face_tracks")
+
+    __table_args__ = (
+        Index("idx_face_track_shot", "shot_id"),
+        Index("idx_face_track_asset", "asset_id"),
+        Index("idx_face_track_character", "character_id"),
+    )
+
+
+class ObjectTrack(Base):
+    __tablename__ = "object_track"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, server_default=func.now(),
+                                                  onupdate=func.now(), nullable=False)
+    producer_model: Mapped[str] = mapped_column(Text, nullable=False)
+    producer_version: Mapped[str] = mapped_column(Text, nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
+
+    shot_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("shot.id"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("asset.id"), nullable=False)
+    track_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[Optional[float]] = mapped_column(Float)
+    start_pts: Mapped[float] = mapped_column(Float, nullable=False)
+    end_pts: Mapped[float] = mapped_column(Float, nullable=False)
+    bbox_series: Mapped[Optional[list]] = mapped_column(JSONB)
+    crop_path: Mapped[Optional[str]] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("idx_object_track_shot", "shot_id"),
+        Index("idx_object_track_asset", "asset_id"),
+        Index("idx_object_track_label", "label"),
+    )
+
 
 # ── stable_id helper ──────────────────────────────────────────────────────────
 
