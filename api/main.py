@@ -47,4 +47,27 @@ async def _startup():
     except Exception as exc:
         logger.warning("MinIO bucket check failed (will retry on requests): %s", exc)
 
-# Import is appended below to avoid circular issues at module level
+    _check_ollama()
+
+def _check_ollama():
+    """Raise RuntimeError if synthetic_query_llm=ollama and Ollama is unreachable."""
+    from config.settings import settings
+    import urllib.request
+    import urllib.error
+
+    if settings.synthetic_query_llm != "ollama":
+        return
+
+    url = settings.ollama_url.rstrip("/") + "/api/tags"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            if resp.status != 200:
+                raise RuntimeError(
+                    f"Ollama at {settings.ollama_url} returned HTTP {resp.status}"
+                )
+        logger.info("Ollama reachable at %s (model: %s)", settings.ollama_url, settings.ollama_model)
+    except urllib.error.URLError as exc:
+        raise RuntimeError(
+            f"Ollama unreachable at {settings.ollama_url}: {exc.reason}. "
+            f"Start Ollama or set SYNTHETIC_QUERY_LLM=local."
+        ) from exc
