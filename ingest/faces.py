@@ -314,3 +314,15 @@ def _finalize_enrichment(asset_id: str):
         )
         db.commit()
     logger.info("[faces] enrichment complete → asset %s state=complete", asset_id)
+
+    # Enqueue synthetic query generation (additive — does not gate on completion)
+    try:
+        from workers.rq_config import embed_queue
+        embed_queue.enqueue(
+            "ingest.synthetic.generate_synthetic_queries",
+            asset_id,
+            job_timeout=7200,
+        )
+        logger.info("[faces] enqueued synthetic query generation for asset %s", asset_id)
+    except Exception:
+        logger.warning("[faces] failed to enqueue synthetic generation for %s", asset_id, exc_info=True)

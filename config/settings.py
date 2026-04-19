@@ -72,16 +72,17 @@ class Settings(BaseSettings):
     qwen3_vl_dim: int = 2048   # Qwen3-VL-Embedding-2B (fallback: siglip=1152)
     qwen3_text_dim: int = 4096  # Qwen3-Embedding-8B (fallback: bge-m3=1024)
 
-    # Phase 3: synthetic query generation
-    # Allowed values: "ollama" | "local"
-    # "ollama" — POST to ollama_url with ollama_model (default)
-    # "local"  — run a local HuggingFace model at synthetic_query_local_model
-    # No Anthropic / paid-API fallback. If the configured backend is unreachable,
-    # the stage raises RuntimeError rather than silently falling back.
-    synthetic_query_llm: str = "ollama"
+    # Phase 3: synthetic query generation + query planner
+    # Allowed values: "local" | "ollama" | "anthropic"
+    # Runtime selection order: explicit setting wins; "anthropic" is the safe default.
+    # If the configured backend is unavailable the stage raises RuntimeError — no silent fallback.
+    synthetic_query_llm: str = "anthropic"
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3"
     synthetic_query_local_model: str = ""   # required when synthetic_query_llm="local"
+    anthropic_api_key: str = ""
+    synthetic_queries_per_shot: int = 4
+    synthetic_queries_per_turn: int = 2
 
     # Service ports
     api_port: int = 8000
