@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "rtfm": {
+      "command": "/workspace/.pod-persist/venvs/rtfm/bin/python",
+      "args": [
+        "-m",
+        "rtfm.mcp"
+      ],
+      "env": {
+        "RTFM_DB": ".rtfm/library.db"
+      }
+    }
+  }
+}

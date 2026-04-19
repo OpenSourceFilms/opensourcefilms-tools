@@ -1,16 +1,13 @@
 """
 Stage 4: run_ocr
 Runs PaddleOCR on every keyframe. Writes OcrSpan rows.
-Advances asset state to 'complete' after finishing (regardless of whether ASR completed).
-In practice, ASR and keyframe extraction are parallel — OCR fires after keyframes,
-so 'complete' means keyframes+OCR done; ASR may still be writing concurrently.
-A Phase 1 job can re-check and set to 'enriching' once both ASR and OCR are verified.
+On completion, triggers embed if ASR is also done (atomic CAS on state).
 """
 import logging
 import os
 import tempfile
 
-import dramatiq
+from sqlalchemy import text
 
 from config.settings import settings
 from db.sync_session import get_sync_db
@@ -18,46 +15,71 @@ from db.models import Asset, Keyframe, OcrSpan
 from ingest.gpu_pod_manager import gpu_available
 
 logger = logging.getLogger(__name__)
-PADDLEOCR_VERSION = "2.8"
+PADDLEOCR_VERSION = "3.x"
 _paddle = None
+_paddle_broken = False
 
 
 def _get_paddle():
-    global _paddle
+    global _paddle, _paddle_broken
+    if _paddle_broken:
+        return None
     if _paddle is None:
-        from paddleocr import PaddleOCR
-        _paddle = PaddleOCR(use_angle_cls=True, lang=settings.paddleocr_lang, show_log=False)
-        logger.info("[ocr] PaddleOCR loaded")
+        try:
+            from paddleocr import PaddleOCR
+            use_gpu = gpu_available()
+            # v3 API: lang is still accepted, no use_angle_cls/use_gpu/show_log
+            _paddle = PaddleOCR(
+                lang=settings.paddleocr_lang,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+            )
+            logger.info("[ocr] PaddleOCR loaded (GPU=%s)", use_gpu)
+        except Exception as exc:
+            logger.warning("[ocr] PaddleOCR init failed (%s) — OCR will be skipped", exc)
+            _paddle_broken = True
+            return None
     return _paddle
 
 
 def _ocr_image(image_path: str) -> list[dict]:
+    paddle = _get_paddle()
+    if paddle is None:
+        return []
     from PIL import Image
     img = Image.open(image_path)
     w, h = img.size
-    result = _get_paddle().ocr(image_path, cls=True)
+    try:
+        results = paddle.predict(image_path)
+    except Exception as exc:
+        logger.warning("[ocr] predict failed for %s: %s", image_path, exc)
+        return []
     spans = []
-    if not result or not result[0]:
-        return spans
-    for line in result[0]:
-        if not line:
-            continue
-        box, (text, conf) = line
-        if conf < settings.ocr_confidence_threshold:
-            continue
-        xs, ys = [p[0] for p in box], [p[1] for p in box]
-        spans.append({
-            "text": text,
-            "bbox": {
-                "x": round(min(xs) / w, 4), "y": round(min(ys) / h, 4),
-                "w": round((max(xs) - min(xs)) / w, 4), "h": round((max(ys) - min(ys)) / h, 4),
-            },
-            "confidence": round(conf, 4),
-        })
+    for page_result in (results or []):
+        # v3 result: list of OCRResult objects with rec_texts, rec_scores, det_polys
+        rec_texts = getattr(page_result, "rec_texts", None) or []
+        rec_scores = getattr(page_result, "rec_scores", None) or []
+        det_polys = getattr(page_result, "det_polys", None) or []
+        for text, conf, poly in zip(rec_texts, rec_scores, det_polys):
+            if conf < settings.ocr_confidence_threshold:
+                continue
+            # poly is list of [x,y] points
+            try:
+                xs = [p[0] for p in poly]
+                ys = [p[1] for p in poly]
+            except (TypeError, IndexError):
+                continue
+            spans.append({
+                "text": text,
+                "bbox": {
+                    "x": round(min(xs) / w, 4), "y": round(min(ys) / h, 4),
+                    "w": round((max(xs) - min(xs)) / w, 4), "h": round((max(ys) - min(ys)) / h, 4),
+                },
+                "confidence": round(conf, 4),
+            })
     return spans
 
 
-@dramatiq.actor(queue_name="ingest_gpu", max_retries=2, time_limit=3_600_000)
 def run_ocr(asset_id: str):
     import store.client as store_client
 
@@ -76,7 +98,6 @@ def run_ocr(asset_id: str):
         logger.info("[ocr] start asset_id=%s keyframes=%d", asset_id, len(keyframes))
 
         try:
-            # If PaddleOCR not installed, skip OCR and advance state
             try:
                 import paddleocr  # noqa
                 paddle_available = True
@@ -113,13 +134,22 @@ def run_ocr(asset_id: str):
             db.commit()
             logger.info("[ocr] done asset_id=%s spans=%d", asset_id, total)
 
-            # Advance to complete
-            asset = db.query(Asset).filter(Asset.id == asset_id).first()
-            if asset and asset.ingest_state != "failed":
-                asset.ingest_state = "complete"
-                asset.ingest_error = None
-                db.commit()
-                logger.info("[ocr] asset_id=%s → state=complete", asset_id)
+            # Atomic: mark ocr_done=true, transition to embedding if asr_done too
+            row = db.execute(
+                text("""
+                    UPDATE asset
+                    SET ocr_done = true,
+                        ingest_state = CASE WHEN asr_done THEN 'embedding' ELSE ingest_state END
+                    WHERE id = :id AND ingest_state NOT IN ('failed', 'embedding', 'complete')
+                    RETURNING ingest_state
+                """),
+                {"id": asset_id},
+            ).fetchone()
+            db.commit()
+
+            if row and row[0] == "embedding":
+                logger.info("[ocr] both asr+ocr done → queuing embed asset_id=%s", asset_id)
+                _enqueue_embed(asset_id)
 
         except Exception as exc:
             logger.exception("[ocr] failed asset_id=%s", asset_id)
@@ -129,3 +159,9 @@ def run_ocr(asset_id: str):
                 asset.ingest_error = f"ocr: {exc}"
                 db.commit()
             raise
+
+
+def _enqueue_embed(asset_id: str):
+    from workers.rq_config import embed_queue
+    from ingest.embed import embed_asset
+    embed_queue.enqueue(embed_asset, asset_id, job_timeout=7200)

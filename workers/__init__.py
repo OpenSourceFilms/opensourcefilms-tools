@@ -1,10 +1,7 @@
 """
-Import all actor modules here so Dramatiq discovers them when starting a worker.
+Worker module — exposes queue handles.
+RQ discovers job functions by their dotted import path at job execution time,
+so eager imports of ingest modules here are not required (and break venvs
+that lack heavy deps like cv2, paddle, etc.).
 """
-from workers.dramatiq_config import broker  # noqa: F401 — sets global broker
-
-from ingest import probe       # noqa: F401
-from ingest import segment     # noqa: F401
-from ingest import keyframes   # noqa: F401
-from ingest import asr         # noqa: F401
-from ingest import ocr         # noqa: F401
+from workers.rq_config import ingest_queue, ingest_gpu_queue, embed_queue  # noqa

@@ -8,18 +8,13 @@ mkdir -p "$PERSIST/logs"
 
 echo "=== Starting services ==="
 
-# PostgreSQL
-PG_DATA="$PERSIST/postgres/data"
-if [ -f "$PG_DATA/PG_VERSION" ]; then
-    if ! pg_isready -q 2>/dev/null; then
-        sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl \
-            -D "$PG_DATA" -l "$PERSIST/postgres/pg.log" start -w
-        echo "  PostgreSQL started"
-    else
-        echo "  PostgreSQL already running"
-    fi
+# PostgreSQL — use pg_restore_on_start.sh (handles /pgdata init + restore)
+export PATH="/usr/lib/postgresql/16/bin:$PATH"
+if ! pg_isready -q 2>/dev/null; then
+    bash /workspace/pipeline/scripts/pg_restore_on_start.sh
+    echo "  PostgreSQL started"
 else
-    echo "  PostgreSQL not initialised — run setup_infrastructure.sh first"
+    echo "  PostgreSQL already running"
 fi
 
 # Redis

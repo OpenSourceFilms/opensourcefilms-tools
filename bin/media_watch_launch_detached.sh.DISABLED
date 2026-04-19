@@ -14,6 +14,7 @@ MW_RUNSTATE="${MW_ROOT}/runstate"
 
 PIDFILE="${MW_RUNSTATE}/media_watch.pid"
 LOGFILE="${MW_RUNSTATE}/media_watch.log"
+STATEFILE="${MW_ROOT}/state.json"
 
 PY="/workspace/venvs/cpu/bin/python"
 DAEMON="/workspace/pipeline/bin/media_watch_daemon.py"
@@ -52,7 +53,7 @@ assert_no_legacy_writes() {
 }
 
 ensure_dirs() {
-  mkdir -p "$MW_RUNS" "$MW_SCANS" "$MW_STAGE_LOGS" "$MW_RUNSTATE"
+  mkdir -p "$MW_ROOT" "$MW_RUNS" "$MW_SCANS" "$MW_STAGE_LOGS" "$MW_RUNSTATE"
   chmod 755 "$LOGROOT" "$MW_ROOT" "$MW_RUNS" "$MW_SCANS" "$MW_STAGE_LOGS" "$MW_RUNSTATE" 2>/dev/null || true
 }
 
@@ -93,13 +94,34 @@ EOF2
 
 read_pid() {
   if [[ -f "$PIDFILE" ]]; then
-    cat "$PIDFILE" 2>/dev/null || true
+    tr -d '[:space:]' < "$PIDFILE" 2>/dev/null || true
   fi
 }
 
-pid_is_running() {
+pid_exists() {
   pid="$1"
-  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+  [[ -n "$pid" ]] && [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+pid_cmdline() {
+  pid="$1"
+  tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true
+}
+
+# True only if PID exists and belongs to our daemon script.
+pid_is_media_watch_daemon() {
+  pid="$1"
+  if ! pid_exists "$pid"; then
+    return 1
+  fi
+
+  cmd="$(pid_cmdline "$pid")"
+  [[ -n "$cmd" ]] || return 1
+
+  case "$cmd" in
+    *"/workspace/pipeline/bin/media_watch_daemon.py"*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 cmd_start() {
@@ -109,12 +131,19 @@ cmd_start() {
 
   pid="$(read_pid)"
 
-  if pid_is_running "$pid"; then
+  if pid_is_media_watch_daemon "$pid"; then
     echo "already running pid=$pid"
     return 0
   fi
 
-  # Clean stale pidfile if present
+  # If pidfile exists but pid is dead or not our daemon, clean stale pidfile.
+  if [[ -n "$pid" ]]; then
+    if pid_exists "$pid"; then
+      echo "WARN: pidfile points to non-daemon process pid=$pid, replacing stale pidfile"
+    else
+      echo "INFO: stale pidfile detected pid=$pid, replacing"
+    fi
+  fi
   rm -f "$PIDFILE" 2>/dev/null || true
 
   nohup "$PY" "$DAEMON" \
@@ -124,16 +153,27 @@ cmd_start() {
     --settle-seconds "$SETTLE_SECONDS" \
     --max-per-scan "$MAX_PER_SCAN" \
     --publish-stageC \
-    --state "${MW_RUNSTATE}/media_watch_state.json" \
+    --state "$STATEFILE" \
     --log "$LOGFILE" \
     >/dev/null 2>&1 &
 
   pid=$!
   echo "$pid" > "$PIDFILE"
 
+  # Verify launched PID is actually our daemon.
+  sleep 0.2
+  if ! pid_is_media_watch_daemon "$pid"; then
+    echo "ERROR: launched pid is not media_watch daemon pid=$pid"
+    cmd="$(pid_cmdline "$pid")"
+    echo "cmdline=${cmd:-<unavailable>}"
+    rm -f "$PIDFILE" 2>/dev/null || true
+    return 4
+  fi
+
   echo "started pid=$pid"
   echo "logroot=$LOGROOT"
   echo "pidfile=$PIDFILE"
+  echo "statefile=$STATEFILE"
   echo "daemon_log=$LOGFILE"
 }
 
@@ -145,12 +185,16 @@ cmd_status() {
     return 1
   fi
 
-  if pid_is_running "$pid"; then
+  if pid_is_media_watch_daemon "$pid"; then
     echo "running pid=$pid"
     return 0
   fi
 
-  echo "not running (stale pidfile pid=$pid)"
+  if pid_exists "$pid"; then
+    echo "not running (pidfile points to non-daemon process pid=$pid)"
+  else
+    echo "not running (stale pidfile pid=$pid)"
+  fi
   return 1
 }
 
@@ -163,25 +207,29 @@ cmd_stop() {
     return 0
   fi
 
-  if pid_is_running "$pid"; then
+  if pid_is_media_watch_daemon "$pid"; then
     kill -TERM "$pid" 2>/dev/null || true
 
     # wait up to ~10s for graceful exit
     for _ in {1..20}; do
-      if ! pid_is_running "$pid"; then
+      if ! pid_exists "$pid"; then
         break
       fi
       sleep 0.5
     done
 
-    if pid_is_running "$pid"; then
+    if pid_exists "$pid"; then
       echo "WARN: still running after TERM, sending SIGKILL pid=$pid"
       kill -KILL "$pid" 2>/dev/null || true
     fi
 
     echo "stopped pid=$pid"
   else
-    echo "not running (stale pidfile pid=$pid)"
+    if pid_exists "$pid"; then
+      echo "not running (pidfile points to non-daemon process pid=$pid)"
+    else
+      echo "not running (stale pidfile pid=$pid)"
+    fi
   fi
 
   rm -f "$PIDFILE" 2>/dev/null || true

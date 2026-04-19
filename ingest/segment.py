@@ -7,8 +7,6 @@ import logging
 import sys
 from pathlib import Path
 
-import dramatiq
-
 from config.settings import settings
 from db.sync_session import get_sync_db
 from db.models import Asset, Shot
@@ -59,12 +57,11 @@ def _pyscenedetect_fallback(video_path: str, duration_s: float) -> list[tuple[fl
     except Exception as exc:
         logger.warning("[segment] PySceneDetect failed (%s), single-shot fallback", exc)
 
-    # Ultimate fallback: entire file is one shot
     return [(0.0, round(duration_s, 4))]
 
 
-@dramatiq.actor(queue_name="ingest", max_retries=2)
 def segment_shots(asset_id: str):
+    from workers.rq_config import ingest_queue, ingest_gpu_queue
     from ingest.keyframes import extract_keyframes
     from ingest.asr import run_asr
 
@@ -84,15 +81,14 @@ def segment_shots(asset_id: str):
             boundaries = _run_transnetv2(video_path, duration_s)
 
             for idx, (start, end) in enumerate(boundaries):
-                shot = Shot(
+                db.add(Shot(
                     asset_id=asset_id,
                     shot_index=idx,
                     start_pts=start,
                     end_pts=end,
                     producer_model="transnetv2",
                     producer_version=TRANSNETV2_VERSION,
-                )
-                db.add(shot)
+                ))
 
             asset.shot_count = len(boundaries)
             asset.ingest_state = "extracting"
@@ -107,5 +103,5 @@ def segment_shots(asset_id: str):
             db.commit()
             raise
 
-    extract_keyframes.send(asset_id)
-    run_asr.send(asset_id)
+    ingest_queue.enqueue(extract_keyframes, asset_id, job_timeout=3600)
+    ingest_gpu_queue.enqueue(run_asr, asset_id, job_timeout=7200)

@@ -1,7 +1,8 @@
 """
 Stage 3b: run_asr
-Detects language, routes to Parakeet (English/GPU) or faster-whisper (fallback).
+Detects language, routes to faster-whisper large-v3 (GPU).
 Diarizes if configured. Writes TranscriptTurn and Sentence rows.
+On completion, triggers embed if OCR is also done (atomic CAS on state).
 """
 import logging
 import os
@@ -9,16 +10,15 @@ import re
 import subprocess
 import tempfile
 
-import dramatiq
+from sqlalchemy import text
 
 from config.settings import settings
 from db.sync_session import get_sync_db
 from db.models import Asset, Shot, TranscriptTurn, Sentence
-from ingest.gpu_pod_manager import gpu_available, request_gpu_pod
+from ingest.gpu_pod_manager import gpu_available
 
 logger = logging.getLogger(__name__)
-PARAKEET_VERSION = "1.1b"
-WHISPER_VERSION = "small.en"
+WHISPER_VERSION = "large-v3"
 
 
 def _to_wav(video_path: str, out_path: str, duration_s: int = 0):
@@ -40,24 +40,13 @@ def _detect_language(wav_path: str) -> str:
         return "en"
 
 
-def _transcribe_parakeet(wav_path: str) -> list[dict]:
-    import nemo.collections.asr as nemo_asr
-    model = nemo_asr.models.ASRModel.from_pretrained(model_name=settings.parakeet_model)
-    output = model.transcribe([wav_path], timestamps=True)
-    words = []
-    for hyp in output:
-        if hasattr(hyp, "timestep") and hyp.timestep:
-            for w in hyp.timestep.get("word", []):
-                words.append({"text": w["word"], "start": w["start_offset"], "end": w["end_offset"]})
-    return words
-
-
 def _transcribe_whisper(wav_path: str) -> list[dict]:
     from faster_whisper import WhisperModel
     device = "cuda" if gpu_available() else "cpu"
     compute = "float16" if device == "cuda" else "int8"
+    model_name = settings.whisper_fallback_model  # large-v3 on GPU
     model = WhisperModel(
-        settings.whisper_fallback_model, device=device, compute_type=compute,
+        model_name, device=device, compute_type=compute,
         download_root=settings.whisper_fallback_dir,
     )
     segments, _ = model.transcribe(wav_path, word_timestamps=True, beam_size=5)
@@ -72,8 +61,11 @@ def _diarize(wav_path: str) -> list[dict]:
         from pyannote.audio import Pipeline
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=settings.hf_token or True,
+            token=settings.hf_token or None,
         )
+        if gpu_available():
+            import torch
+            pipeline = pipeline.to(torch.device("cuda"))
         diarization = pipeline(wav_path)
         return [
             {"start": t.start, "end": t.end, "speaker": spk}
@@ -110,8 +102,8 @@ def _words_to_turns(words: list[dict], diarization: list[dict], pause: float) ->
 
 
 def _turn_to_sentences(turn: dict) -> list[dict]:
-    text = " ".join(w["text"] for w in turn["words"])
-    parts = re.split(r"(?<=[.!?])\s+", text.strip())
+    text_str = " ".join(w["text"] for w in turn["words"])
+    parts = re.split(r"(?<=[.!?])\s+", text_str.strip())
     sents, wi = [], 0
     ws = turn["words"]
     for part in parts:
@@ -122,17 +114,10 @@ def _turn_to_sentences(turn: dict) -> list[dict]:
         e_idx = min(wi + n - 1, len(ws) - 1)
         sents.append({"text": part, "start": ws[s_idx]["start"], "end": ws[e_idx]["end"]})
         wi += n
-    return sents or [{"text": text, "start": turn["start"], "end": turn["end"]}]
+    return sents or [{"text": text_str, "start": turn["start"], "end": turn["end"]}]
 
 
-@dramatiq.actor(queue_name="ingest_gpu", max_retries=2, time_limit=7_200_000)
 def run_asr(asset_id: str):
-    if settings.require_gpu_for_asr and not gpu_available():
-        request_gpu_pod("run_asr")
-        logger.warning("[asr] No GPU — REQUIRE_GPU_FOR_ASR=true — requeuing asset_id=%s", asset_id)
-        run_asr.send_with_options(args=(asset_id,), delay=60_000)
-        return
-
     wav_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     wav_tmp.close()
 
@@ -148,7 +133,6 @@ def run_asr(asset_id: str):
         try:
             _to_wav(video_path, wav_tmp.name)
 
-            # Sample for language detection
             sample_wav = wav_tmp.name + ".sample.wav"
             _to_wav(video_path, sample_wav, settings.asr_language_sample_s)
             language = _detect_language(sample_wav)
@@ -158,16 +142,9 @@ def run_asr(asset_id: str):
                 pass
             logger.info("[asr] language=%s asset_id=%s", language, asset_id)
 
-            producer_model, producer_version = "faster-whisper", WHISPER_VERSION
-            try:
-                if language == "en" and gpu_available():
-                    words = _transcribe_parakeet(wav_tmp.name)
-                    producer_model, producer_version = "parakeet-tdt", PARAKEET_VERSION
-                else:
-                    raise RuntimeError("routing to whisper")
-            except Exception as exc:
-                logger.info("[asr] using faster-whisper fallback: %s", exc)
-                words = _transcribe_whisper(wav_tmp.name)
+            words = _transcribe_whisper(wav_tmp.name)
+            producer_model = "faster-whisper"
+            producer_version = settings.whisper_fallback_model
 
             diarization = _diarize(wav_tmp.name) if settings.diarize else []
             turns = _words_to_turns(words, diarization, settings.min_speaker_pause_s)
@@ -185,7 +162,6 @@ def run_asr(asset_id: str):
                         return s.id
                 return None
 
-            confidence = 1.0 if producer_model == "parakeet-tdt" else 0.85
             for i, turn in enumerate(turns):
                 tt = TranscriptTurn(
                     asset_id=asset_id,
@@ -196,7 +172,7 @@ def run_asr(asset_id: str):
                     speaker_label=turn["speaker"],
                     text=" ".join(w["text"] for w in turn["words"]).strip(),
                     language=language,
-                    confidence=confidence,
+                    confidence=0.92,
                     producer_model=producer_model,
                     producer_version=producer_version,
                 )
@@ -218,6 +194,23 @@ def run_asr(asset_id: str):
             db.commit()
             logger.info("[asr] done asset_id=%s turns=%d model=%s", asset_id, len(turns), producer_model)
 
+            # Atomic: mark asr_done=true, transition to embedding if ocr_done too
+            row = db.execute(
+                text("""
+                    UPDATE asset
+                    SET asr_done = true,
+                        ingest_state = CASE WHEN ocr_done THEN 'embedding' ELSE ingest_state END
+                    WHERE id = :id
+                    RETURNING ingest_state
+                """),
+                {"id": asset_id},
+            ).fetchone()
+            db.commit()
+
+            if row and row[0] == "embedding":
+                logger.info("[asr] both asr+ocr done → queuing embed asset_id=%s", asset_id)
+                _enqueue_embed(asset_id)
+
         except Exception as exc:
             logger.exception("[asr] failed asset_id=%s", asset_id)
             asset = db.query(Asset).filter(Asset.id == asset_id).first()
@@ -231,3 +224,9 @@ def run_asr(asset_id: str):
                 os.unlink(wav_tmp.name)
             except OSError:
                 pass
+
+
+def _enqueue_embed(asset_id: str):
+    from workers.rq_config import embed_queue
+    from ingest.embed import embed_asset
+    embed_queue.enqueue(embed_asset, asset_id, job_timeout=7200)

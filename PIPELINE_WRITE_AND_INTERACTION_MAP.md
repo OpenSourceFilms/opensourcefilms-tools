@@ -1,44 +1,34 @@
 PIPELINE_WRITE_AND_INTERACTION_MAP.md
 
-Version: 2.7
-Validated through 2026-02-03 (UTC), re-validation scheduled 2026-02-04 (UTC)
+Version: 2.8
+Validated through 2026-02-11 (UTC), re-validation scheduled 2026-02-12 (UTC)
 
 ====================================================================
 SUMMARY OF ALTERATIONS (SURGICAL)
 
-Operational logging unification applied to this map:
+Operational logging unification retained:
 All operational records, runstate, and tool audits MUST be written under:
-  /workspace/pipeline/logs.all
-Any operational writes under /workspace/logs or /workspace/runstate are now prohibited by this map.
+/workspace/pipeline/logs.all
+Operational writes under /workspace/logs or /workspace/runstate remain prohibited.
 
-Replaced watcher operational ownership entries to match the new operational log root:
-• /workspace/pipeline/logs.all/media_watch/audit (per-run forensic audit JSONs, tool_media_watch_outcome family)
-• /workspace/pipeline/logs.all/media_watch/state.json and /workspace/pipeline/logs.all/media_watch/media_watch.pid (watcher state + pidfile)
-This supersedes all /workspace/runstate/media_watch* entries.
+Watcher and service operational ownership retained:
+• /workspace/pipeline/logs.all/media_watch/*
+• /workspace/pipeline/logs.all/media_webroot/*
 
-Replaced watcher combined stdout/stderr log path ownership:
-• /workspace/pipeline/logs.all/media_watch/stage_logs
-This supersedes /workspace/logs/media_watch.
+Launcher/preflight control-surface governance added:
+The launcher and preflight scripts are now explicitly mapped as contract-critical operational tooling:
+• /workspace/pipeline/bin/media_watch_launch_detached.sh
+• /workspace/pipeline/bin/preflight_guard.sh
 
-Replaced media_webroot operational ownership entries:
-• /workspace/pipeline/logs.all/media_webroot/logs
-• /workspace/pipeline/logs.all/media_webroot/runstate
-This supersedes /workspace/logs/media_webroot and /workspace/runstate/media_webroot.
+Preflight/launcher operational evidence placement clarified:
+Contract/preflight run evidence MUST be written under logs.all (tool manifests/outcomes), with append-only canonical audit mirrors under /workspace/catalog/audit when invoked as audited tooling.
 
-Moved non-stage tooling append-only audit surface from catalog to operational log root:
-Tool run manifests and contracts outcomes are operational artifacts and MUST live under logs.all.
-Canonical semantic audit remains under /workspace/catalog/audit.
+Repository-root resolution rule added for operational guards:
+Guard tooling MUST resolve repo root dynamically (git top-level), not by hardcoded alternate roots.
 
-Retained Stage A pipeline evidence directory governance:
-• /workspace/catalog/logs remains Stage A-owned (observed production behavior).
-
-Retained (and reaffirmed) Stage B1 upstream identity linkage rule:
-Embeddings must reference the current chunks sha via chunks_artifact_sha256.
-
-Retained prohibition: moving/archiving media_watch audit directory while daemon is running:
-Rotation is allowed only when the daemon is stopped, regardless of the new location.
-
-No other directory owners or stage permissions changed.
+No stage write ownership changed.
+No canonical stage semantics changed.
+No catalog directory ownership changed.
 
 ====================================================================
 PURPOSE OF THIS DOCUMENT
@@ -84,6 +74,12 @@ All operational logs, operational runstate, and tool operational audit artifacts
 • /workspace/pipeline/logs.all
 Operational artifacts MUST NOT be written under /workspace/logs or /workspace/runstate.
 
+Operational control-surface guardrails
+Launcher/preflight operational controls are contract-critical:
+• media_watch_launch_detached.sh and preflight_guard.sh are governed tooling surfaces.
+• Guard tooling MUST resolve repository root via git top-level.
+• Guard tooling MUST fail explicitly on invariant violations and must not silently continue on partial checks.
+
 ====================================================================
 DIRECTORY OWNERSHIP
 
@@ -104,7 +100,6 @@ Rules:
 • Configuration changes are governance actions and should be audited externally when relevant.
 • Example: reprocess_policy.json is a non-canonical operational policy file used by always-on watchers to decide reprocessing based on explicit artifact fingerprinting.
 
---------------------------------------------------------------------
 CANONICAL PIPELINE DATA (CATALOG)
 
 /workspace/catalog/raw
@@ -272,7 +267,6 @@ Rules:
 • Never rewritten.
 • File naming MUST include run_id and UTC timestamp.
 
---------------------------------------------------------------------
 OPERATIONAL LOGS AND RUNSTATE (NON-CANONICAL, CONTRACT-GOVERNED)
 
 /workspace/pipeline/logs.all
@@ -336,7 +330,21 @@ Rules:
 • PID file only.
 • Presence/absence MUST NOT be used as pipeline readiness.
 
---------------------------------------------------------------------
+/workspace/pipeline/logs.all/tools/preflight
+Writer: preflight_guard and audited operational tooling
+Readers: Humans, tooling
+Rules:
+• Operational preflight evidence only.
+• MUST include explicit pass/fail outcomes and invariant details when invoked.
+• MUST NOT be treated as semantic stage truth.
+
+/workspace/pipeline/logs.all/tools/launch
+Writer: launcher/operator tooling
+Readers: Humans, tooling
+Rules:
+• Operational launcher evidence only (start/stop/status attempts, command identity, outcome).
+• MUST use explicit non-zero outcomes on invariant violations.
+
 RUN-SCOPED EXECUTION ARTIFACTS (OPTIONAL)
 
 /workspace/catalog/runs
@@ -544,9 +552,9 @@ Constraints:
 TOOLING (NON-STAGE) – AUDITED ACTIONS (ENV GUARDS, SERVICE SETUP, SYSTEM OPS)
 Writes:
 • Operational only:
-  – /workspace/pipeline/logs.all/* (tool run manifests, tool contracts outcomes, tool operational audits)
+– /workspace/pipeline/logs.all/* (tool run manifests, tool contracts outcomes, preflight/launcher operational outcomes)
 • Canonical audit (append-only only):
-  – /workspace/catalog/audit/*
+– /workspace/catalog/audit/*
 
 Reads:
 • pipeline code and configuration (read-only)
@@ -555,13 +563,14 @@ Constraints:
 • MUST NOT write to any /workspace/catalog/* paths except append-only writes under /workspace/catalog/audit/*.
 • MUST NOT mutate or replace canonical artifacts.
 • MUST NOT infer success from side effects, it MUST write explicit audit artifacts.
+• Guard tooling MUST resolve repository root dynamically via git top-level before applying path-based checks.
 
 MEDIA_WEBROOT SERVICE
 Writes:
 • None to pipeline or catalog state
 • Operational only (under logs.all):
-  – /workspace/pipeline/logs.all/media_webroot/logs/*
-  – /workspace/pipeline/logs.all/media_webroot/runstate/*
+– /workspace/pipeline/logs.all/media_webroot/logs/*
+– /workspace/pipeline/logs.all/media_webroot/runstate/*
 
 Reads:
 • /workspace/webroot/*
@@ -647,6 +656,7 @@ Additionally forbidden:
 • Moving or rotating /workspace/pipeline/logs.all/media_watch/audit while media_watch is running.
 • Using empty strings for enumerated fields (reason, decision_reason, reasons entries, etc).
 • Writing operational logs or operational runstate anywhere outside /workspace/pipeline/logs.all.
+• Treating launcher/preflight invariant failures as warnings-only conditions.
 
 ====================================================================
 APPENDIX A — NON-CANONICAL COMPUTE AND WRITE BOUNDARIES (INFORMATIONAL)

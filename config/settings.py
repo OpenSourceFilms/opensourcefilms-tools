@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     transnetv2_weights: str = "/workspace/weights/transnetv2"
     parakeet_model: str = "nvidia/parakeet-tdt-1.1b"
     paddleocr_lang: str = "en"
-    qwen3_vl_model: str = "Qwen/Qwen3-VL-Embedding"
-    qwen3_text_model: str = "Qwen/Qwen3-Embedding"
-    whisper_fallback_model: str = "small.en"
+    qwen3_vl_model: str = "/workspace/weights/qwen3/Qwen3-VL-Embedding-2B"
+    qwen3_text_model: str = "/workspace/weights/qwen3/Qwen3-Embedding-8B"
+    whisper_fallback_model: str = "large-v3"
     whisper_fallback_dir: str = "/workspace/pipeline/models/whispercpp"
 
     # HuggingFace
@@ -49,9 +49,12 @@ class Settings(BaseSettings):
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
 
+    # Embedding
+    embed_batch_size: int = 8
+
     # Embedding dims (verified against actual model output)
-    qwen3_vl_dim: int = 2048
-    qwen3_text_dim: int = 4096
+    qwen3_vl_dim: int = 2048   # Qwen3-VL-Embedding-2B (fallback: siglip=1152)
+    qwen3_text_dim: int = 4096  # Qwen3-Embedding-8B (fallback: bge-m3=1024)
 
     # Service ports
     api_port: int = 8000

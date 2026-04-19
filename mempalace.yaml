@@ -1,0 +1,12 @@
+wing: pipeline
+rooms:
+- name: spec
+  description: MASTER.md spec and architecture documentation
+- name: stages
+  description: Stage scripts, bin/ implementations and stage logic
+- name: contracts
+  description: Contract checks, preflight guards, invariants
+- name: logs
+  description: Log structure, heartbeat, manifest freshness
+- name: general
+  description: Other pipeline files

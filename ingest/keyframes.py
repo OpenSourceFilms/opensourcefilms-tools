@@ -8,7 +8,6 @@ import os
 import tempfile
 
 import cv2
-import dramatiq
 import imagehash
 from PIL import Image
 
@@ -44,8 +43,8 @@ def _extract_frames(video_path: str, start_pts: float, end_pts: float, n: int) -
     return results
 
 
-@dramatiq.actor(queue_name="ingest", max_retries=2)
 def extract_keyframes(asset_id: str):
+    from workers.rq_config import ingest_gpu_queue
     from ingest.ocr import run_ocr
 
     with get_sync_db() as db:
@@ -106,4 +105,4 @@ def extract_keyframes(asset_id: str):
                 db.commit()
             raise
 
-    run_ocr.send(asset_id)
+    ingest_gpu_queue.enqueue(run_ocr, asset_id, job_timeout=3600)

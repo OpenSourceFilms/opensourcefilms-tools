@@ -1,13 +1,11 @@
 """
 Stage 1: probe_asset
-Runs ffprobe on the asset file, extracts media metadata, advances state to 'segmenting'.
+Runs ffprobe, extracts media metadata, advances state to 'segmenting'.
 """
 import hashlib
 import json
 import logging
 import subprocess
-
-import dramatiq
 
 from config.settings import settings
 from db.sync_session import get_sync_db
@@ -55,8 +53,8 @@ def _extract_meta(probe: dict) -> dict:
     }
 
 
-@dramatiq.actor(queue_name="ingest", max_retries=2)
 def probe_asset(asset_id: str):
+    from workers.rq_config import ingest_queue
     from ingest.segment import segment_shots
 
     with get_sync_db() as db:
@@ -97,4 +95,4 @@ def probe_asset(asset_id: str):
             db.commit()
             raise
 
-    segment_shots.send(asset_id)
+    ingest_queue.enqueue(segment_shots, asset_id, job_timeout=600)

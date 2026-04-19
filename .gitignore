@@ -64,3 +64,6 @@ Thumbs.db
 bin/python
 bin/open-clip-torch==*
 bin/2n
+
+# RTFM local database
+.rtfm/

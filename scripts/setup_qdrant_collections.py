@@ -20,17 +20,27 @@ COLLECTIONS = [
     {
         "name": "visual_keyframe_qwen3vl",
         "dim": settings.qwen3_vl_dim,
+        "payload_indexes": ["asset_id", "shot_id", "keyframe_id", "project_id", "embedding_version", "deleted"],
+    },
+    {
+        "name": "visual_shot_qwen3vl",
+        "dim": settings.qwen3_vl_dim,
         "payload_indexes": ["asset_id", "shot_id", "project_id", "embedding_version", "deleted"],
     },
     {
         "name": "text_sentence_qwen3",
+        "dim": settings.qwen3_text_dim,
+        "payload_indexes": ["asset_id", "turn_id", "sentence_id", "project_id", "embedding_version", "deleted"],
+    },
+    {
+        "name": "text_turn_qwen3",
         "dim": settings.qwen3_text_dim,
         "payload_indexes": ["asset_id", "turn_id", "project_id", "embedding_version", "deleted"],
     },
     {
         "name": "ocr_span_qwen3",
         "dim": settings.qwen3_text_dim,
-        "payload_indexes": ["asset_id", "keyframe_id", "project_id", "embedding_version", "deleted"],
+        "payload_indexes": ["asset_id", "keyframe_id", "ocr_span_id", "project_id", "embedding_version", "deleted"],
     },
 ]
 

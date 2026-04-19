@@ -74,7 +74,8 @@ async def upload_asset(
             await db.refresh(asset)
             asset_id = asset.id
 
-        probe_asset.send(asset_id)
+        from workers.rq_config import ingest_queue
+        ingest_queue.enqueue(probe_asset, asset_id, job_timeout=600)
 
         return {
             "asset_id": asset_id,

@@ -71,6 +71,8 @@ class Asset(TimestampMixin, Base):
     container: Mapped[Optional[str]] = mapped_column(Text)
     ingest_state: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     ingest_error: Mapped[Optional[str]] = mapped_column(Text)
+    asr_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    ocr_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     shot_count: Mapped[Optional[int]] = mapped_column(Integer)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
 
@@ -150,6 +152,7 @@ class Keyframe(TimestampMixin, Base):
     pts: Mapped[float] = mapped_column(Float, nullable=False)
     path: Mapped[str] = mapped_column(Text, nullable=False)
     phash: Mapped[Optional[str]] = mapped_column(Text)
+    qdrant_point_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
     deleted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMPTZ)
 
     shot: Mapped["Shot"] = relationship("Shot", back_populates="keyframes")
@@ -177,6 +180,7 @@ class TranscriptTurn(EvidenceMixin, Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     language: Mapped[Optional[str]] = mapped_column(Text)
     confidence: Mapped[Optional[float]] = mapped_column(Float)
+    qdrant_point_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
 
     asset: Mapped["Asset"] = relationship("Asset", back_populates="transcript_turns")
     sentences: Mapped[List["Sentence"]] = relationship("Sentence", back_populates="turn")
@@ -199,6 +203,7 @@ class Sentence(EvidenceMixin, Base):
     start_pts: Mapped[float] = mapped_column(Float, nullable=False)
     end_pts: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    qdrant_point_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
 
     turn: Mapped["TranscriptTurn"] = relationship("TranscriptTurn", back_populates="sentences")
 
@@ -220,6 +225,7 @@ class OcrSpan(EvidenceMixin, Base):
     bbox: Mapped[Optional[dict]] = mapped_column(JSONB)
     confidence: Mapped[Optional[float]] = mapped_column(Float)
     language: Mapped[Optional[str]] = mapped_column(Text)
+    qdrant_point_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
 
     keyframe: Mapped["Keyframe"] = relationship("Keyframe", back_populates="ocr_spans")
 
@@ -258,3 +264,11 @@ class EmbeddingModelVersion(Base):
     __table_args__ = (
         UniqueConstraint("model_name", "model_version", "surface"),
     )
+
+# ── stable_id helper ──────────────────────────────────────────────────────────
+
+def _stable_shot_id(asset_sha256: str, shot_index: int) -> str:
+    return f"shot://{asset_sha256[:8]}/{shot_index:05d}"
+
+def _stable_turn_id(asset_sha256: str, turn_index: int) -> str:
+    return f"turn://{asset_sha256[:8]}/{turn_index:05d}"

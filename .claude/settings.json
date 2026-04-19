@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/workspace/.pod-persist/venvs/rtfm/bin/python .claude/hooks/rtfm_sync.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/workspace/.pod-persist/venvs/rtfm/bin/python .claude/hooks/rtfm_stop_sync.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "rtfm"
+  ]
+}

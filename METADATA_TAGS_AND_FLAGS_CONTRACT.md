@@ -1,27 +1,33 @@
 METADATA_TAGS_AND_FLAGS_CONTRACT.md
 
-Version: 2.7
-Evidence horizon: validated through 2026-02-03 (UTC), re-validation scheduled 2026-02-04 (UTC)
+Version: 2.8
+Evidence horizon: validated through 2026-02-11 (UTC), re-validation scheduled 2026-02-12 (UTC)
 
 ====================================================================
 SUMMARY OF ALTERATIONS (SURGICAL)
 
-Operational logging unification:
-All operational records, runstate, and tool audits MUST be written under the single canonical operational log root:
-  /workspace/pipeline/logs.all
-Any operational writes under /workspace/logs or /workspace/runstate are now prohibited by contract.
+Launcher/preflight guardrail contract hardening:
+Added explicit contract-governed launcher invariants and preflight enforcement requirements for:
+• bin/media_watch_launch_detached.sh
+• bin/preflight_guard.sh
 
-Added operational log root invariants and required operational record placement rules.
-Reason: the pipeline requires a single always-go-to location for forensic truth, and Copyparty freshness verification depends on it.
+Reason: recent drift allowed forbidden launcher patterns and malformed control shape to pass until late checks. These files are now explicitly treated as contract-critical control surfaces.
 
-Clarified watcher/orchestration reason code usage and counting rules:
-ALREADY_COMPLIANT and INELIGIBLE_FOR_EMBEDDING MUST remain distinct outcomes, even when start_stage="NONE".
-Reason: aggregated counters and summaries must not conflate compliant with intentionally ineligible.
+Repository-root resolution clarification:
+Operational guard scripts MUST resolve repository root dynamically via git top-level rather than assuming a fixed alternate root path.
 
-Clarified tool_media_watch_outcome fields to include logroot and log paths rooted under logs.all.
-Reason: removes ambiguity and enforces deterministic forensic location.
+Reason: avoids false context failures caused by hardcoded repo paths that do not match runtime.
 
-No other semantics were changed.
+Operational logging unification retained:
+All operational records, runstate, and tool audits remain constrained to:
+/workspace/pipeline/logs.all
+Writes under /workspace/logs or /workspace/runstate remain prohibited.
+
+Watcher reason separation retained:
+ALREADY_COMPLIANT and INELIGIBLE_FOR_EMBEDDING remain distinct outcomes even when start_stage="NONE".
+
+No stage semantic vocabularies were changed.
+No existing reason meanings were changed.
 
 ====================================================================
 PURPOSE OF THIS DOCUMENT
@@ -96,6 +102,48 @@ Required operational record placement:
 • service_runstate, service_error, tool_run_manifest, tool_contracts_outcome, tool_media_watch_outcome MUST be stored under logs.all.
 • All referenced log_path values in operational records MUST resolve under logs.all.
 • All operational JSON writes MUST be atomic. JSONL streams MUST be append-only and must never be zero-byte.
+
+====================================================================
+CONTROL SURFACE CONTRACT (LAUNCHER + PREFLIGHT)
+
+The following files are contract-governed control surfaces:
+• bin/media_watch_launch_detached.sh
+• bin/preflight_guard.sh
+
+Launcher invariants (mandatory):
+• MUST include set -o pipefail.
+• MUST NOT include set -e or set -u tokens.
+• MUST NOT include forbidden tokens:
+– NOHUP_OUT
+– nohup_out
+– media_watch.nohup
+• MUST include required controls:
+– PIDFILE=
+– LOGFILE=
+– exactly one nohup launch stanza
+– --log "$LOGFILE" in the nohup daemon command
+• MUST contain exactly one esac line.
+• MUST NOT include duplicate branch/control fragments that create ambiguous stop/status/start semantics.
+• MUST NOT include adjacent duplicate assignment statements for the same variable in the same block.
+
+Preflight enforcement (mandatory):
+• preflight_guard.sh MUST run with strict shell safety (set -euo pipefail).
+• preflight MUST parse-check launcher syntax before invariant checks.
+• preflight forbidden-pattern matcher MUST use explicit token/line-aware matching (not ambiguous broad substrings).
+• preflight MUST enforce:
+– exactly one nohup invocation (^[[:space:]]*nohup[[:space:]])
+– exactly one esac line
+– required --log "$LOGFILE" usage
+• preflight failures MUST be explicit and non-zero, and MUST NOT silently pass partial checks.
+• preflight context checks MUST resolve repo root using git rev-parse --show-toplevel and evaluate launcher path relative to that root.
+
+Operational validation evidence expected from guard runs:
+• launcher syntax result
+• preflight syntax result
+• forbidden-pattern scan output (or explicit absent marker)
+• esac count
+• nohup count
+• HEAD and relevant file hash fingerprints
 
 ====================================================================
 TOP-LEVEL RECORD TYPES
@@ -307,9 +355,9 @@ EMBEDDING (STAGE B1) REASONS
 Rules:
 • embeddings/.json MUST exist even when no vectors are produced
 • Canonical embedding identity MUST be represented using authoritative content hashes:
-  – onnx_model_sha256
-  – tokenizer_sha256
-  – any additional preprocessing config sha256 if used
+– onnx_model_sha256
+– tokenizer_sha256
+– any additional preprocessing config sha256 if used
 model_id MAY be present but is non-authoritative.
 
 STAGE C (MILVUS MATERIALISATION) REASONS
@@ -355,6 +403,9 @@ Operational hygiene:
 • ATOMIC_WRITE_FAILED
 • OP_LOGROOT_INVALID
 • OP_LOGWRITE_OUTSIDE_LOGROOT
+• LAUNCHER_INVARIANT_FAILED
+• PREFLIGHT_INVARIANT_FAILED
+• REPO_CONTEXT_INVALID
 
 WATCHER / ORCHESTRATION REASONS (media_watch_daemon and similar tooling)
 These reasons are used in operational audit records that describe orchestration decisions. They are not stage semantics and must not be used to infer canonical artifact correctness.
@@ -704,6 +755,7 @@ The following are forbidden:
 • Using free-text fields to override enumerated reason codes
 • Using empty strings for enumerated fields (reason, decision_reason, reasons entries, etc)
 • Writing operational logs or runstate outside /workspace/pipeline/logs.all
+• Treating launcher/preflight invariant failures as warnings-only conditions
 
 ====================================================================
 CHANGE CONTROL

@@ -1,7 +1,7 @@
 MASTER.md
 
-Version: 2.7
-Evidence horizon: validated through 2026-02-03 (UTC), re-validation scheduled 2026-02-04 (UTC)
+Version: 2.8
+Evidence horizon: validated through 2026-02-11 (UTC), re-validation scheduled 2026-02-12 (UTC)
 
 ====================================================================
 CANONICAL ROLE OF THIS DOCUMENT
@@ -39,6 +39,11 @@ Canonical stage implementations currently live under:
 
 Files with names like -CopyN. are treated as non-canonical backups and MUST NOT be used as entrypoints.
 
+Repository root resolution is canonicalised as follows:
+• The canonical repository root MUST be resolved at runtime via git rev-parse --show-toplevel.
+• Scripts and guards MUST NOT hardcode an alternative repo root that may not exist in the active runtime.
+• Relative file checks against canonical files under bin/ MUST be evaluated from the resolved git top-level.
+
 ====================================================================
 CORE INVARIANTS (NON-NEGOTIABLE)
 
@@ -72,6 +77,26 @@ Service “RUNNING” state, process existence, and port listeners are not readi
 Readiness MUST be determined only by explicit readiness endpoints (e.g. /api/health returning 200 with ok=true).
 Callers MUST poll readiness, not guess delays.
 
+Launcher guardrail invariants (contract-critical)
+The detached watcher launcher and its preflight guard are contract-critical control surfaces:
+• bin/media_watch_launch_detached.sh
+• bin/preflight_guard.sh
+
+The launcher MUST satisfy all of the following:
+• MUST NOT include set -e or set -u.
+• MUST include set -o pipefail.
+• MUST NOT contain NOHUP_OUT, nohup_out, or media_watch.nohup.
+• MUST contain exactly one esac line.
+• MUST contain exactly one nohup launch stanza (^[[:space:]]*nohup[[:space:]]).
+• MUST include required controls: PIDFILE=, LOGFILE=, and --log "$LOGFILE" in the launch command.
+• MUST NOT contain duplicated control-flow branches that mix redundant exit/return handling for the same branch semantics.
+• MUST NOT contain adjacent duplicate assignments for the same variable (e.g. repeated pid="$1").
+
+Preflight enforcement is mandatory:
+• bin/preflight_guard.sh MUST fail fast on invariant violations with explicit reason output.
+• Preflight validation MUST run before launcher edits are treated as acceptable and before operational launcher usage is accepted as contract-compliant.
+• Validation evidence MUST include syntax checks, forbidden-pattern scan result, esac count, nohup count, HEAD, and file fingerprints.
+
 ====================================================================
 CANONICAL OPERATIONAL LOGGING (SINGLE ROOT)
 
@@ -87,9 +112,9 @@ Operational logging requirements:
 • All operational writes MUST be atomic or append-only JSONL with explicit event envelopes.
 • Zero-byte operational log files are prohibited unless explicitly defined as valid.
 • Each stage invocation MUST have a stable log directory under logs.all that includes:
-  – per-stage stdout/stderr capture
-  – per-stage meta (exit_code, duration, cmd, log_sha256, log_bytes)
-  – the run_id and media_id
+– per-stage stdout/stderr capture
+– per-stage meta (exit_code, duration, cmd, log_sha256, log_bytes)
+– the run_id and media_id
 
 Decision truthfulness requirement:
 • “Compliant, nothing to do” and “ineligible, intentionally skipped” MUST be represented as distinct reason codes.
@@ -111,10 +136,10 @@ heartbeat.json requirements:
 
 manifest/latest.json requirements:
 • Contains sha256 and byte-length for:
-  – heartbeat.json
-  – the primary daemon event stream(s)
-  – the most recent stage log written
-  – the current versions of the master documents (including their sha256)
+– heartbeat.json
+– the primary daemon event stream(s)
+– the most recent stage log written
+– the current versions of the master documents (including their sha256)
 • Serves as the authoritative anti-stub integrity reference.
 
 Verification requirement:
@@ -193,13 +218,13 @@ Guaranteed outputs:
 
 Conditional required outputs (based on detected audio stream):
 • If the input has an audio stream:
-  – asr/.wav
-  – asr/.srt
-  – asr/.vtt
+– asr/.wav
+– asr/.srt
+– asr/.vtt
 • If the input has no audio stream:
-  – asr/.wav is not required
-  – asr/.srt is not required
-  – asr/.vtt is not required
+– asr/.wav is not required
+– asr/.srt is not required
+– asr/.vtt is not required
 
 Rules:
 • Stage A MUST emit artifacts even when no audio or no speech is detected.
@@ -211,21 +236,21 @@ Rules:
 
 Outcome completeness requirements (explicit, non-inferential):
 • NORMAL_SPEECH (audio present, speech present):
-  – asr/.wav non-empty
-  – asr/.srt non-empty
-  – asr/.vtt non-empty
-  – asr/.json schema v2 with segments non-empty and empty_transcript=false
+– asr/.wav non-empty
+– asr/.srt non-empty
+– asr/.vtt non-empty
+– asr/.json schema v2 with segments non-empty and empty_transcript=false
 • EMPTY_TRANSCRIPT (audio present, no speech detected, or transcript empty after all passes):
-  – asr/.wav non-empty
-  – asr/.srt MUST exist and MUST be non-empty (explicit placeholder allowed)
-  – asr/.vtt MUST exist and MUST be non-empty (explicit placeholder allowed)
-  – asr/.json schema v2 with segments=[], empty_transcript=true
-  – asr/.json MUST include an enumerated reason code (SILENT_AUDIO or NON_SPEECH_AUDIO)
-  – qc and status MUST explicitly record the empty outcome and any fallback path taken
+– asr/.wav non-empty
+– asr/.srt MUST exist and MUST be non-empty (explicit placeholder allowed)
+– asr/.vtt MUST exist and MUST be non-empty (explicit placeholder allowed)
+– asr/.json schema v2 with segments=[], empty_transcript=true
+– asr/.json MUST include an enumerated reason code (SILENT_AUDIO or NON_SPEECH_AUDIO)
+– qc and status MUST explicitly record the empty outcome and any fallback path taken
 • NO_AUDIO_TRACK (no audio stream):
-  – asr/.json schema v2 with segments=[], empty_transcript=true and reason=NO_AUDIO_TRACK
-  – asr/.qc.json MUST exist and MUST explicitly record the no-audio outcome
-  – wav, srt, vtt are not required and MUST NOT be required by contract in this case
+– asr/.json schema v2 with segments=[], empty_transcript=true and reason=NO_AUDIO_TRACK
+– asr/.qc.json MUST exist and MUST explicitly record the no-audio outcome
+– wav, srt, vtt are not required and MUST NOT be required by contract in this case
 
 ====================================================================
 STAGE B — VISUAL ENRICHMENT
@@ -285,7 +310,7 @@ Guaranteed outputs:
 Rules:
 • When ASR contains segments, one or more records with record_type="chunk" MUST be written.
 • When ASR contains zero segments, the file MUST still exist and MUST contain exactly one explicit non-chunk outcome record:
-  record_type="chunking_outcome" reason="ASR_SEGMENTS_EMPTY"
+record_type="chunking_outcome" reason="ASR_SEGMENTS_EMPTY"
 • Zero-byte chunk files are prohibited.
 • Chunking outcome records MUST include artifact_fingerprint once implemented. Until implemented, chunk artifacts without artifact_fingerprint MUST be treated as eligible for reprocessing under the deprecated-tool policy.
 
@@ -300,16 +325,16 @@ Guaranteed outputs:
 Rules:
 • Embeddings files MUST exist after invocation, regardless of outcome.
 • Files MUST explicitly record:
-  – Model identifier (non-authoritative label)
-  – Model revision hash
-  – Embedding dimensionality
-  – Normalization flags
-  – Embedding count
-  – Execution environment
+– Model identifier (non-authoritative label)
+– Model revision hash
+– Embedding dimensionality
+– Normalization flags
+– Embedding count
+– Execution environment
 • Canonical embedding identity MUST include authoritative content hashes for:
-  – the ONNX model file actually loaded (onnx_model_sha256)
-  – the tokenizer artifact actually loaded (tokenizer_sha256)
-  – any additional preprocessing config artifact if used (sha256)
+– the ONNX model file actually loaded (onnx_model_sha256)
+– the tokenizer artifact actually loaded (tokenizer_sha256)
+– any additional preprocessing config artifact if used (sha256)
 A model_id string may remain but MUST be treated as non-authoritative compared to hashes.
 • If no chunks are eligible for embedding, the file MUST still exist and MUST explicitly record the reason: NO_ELIGIBLE_CHUNKS.
 • Embedding success or failure MUST NEVER be inferred from file presence.
@@ -329,11 +354,11 @@ Rules:
 • Stage E0 operates strictly on existing chunks artifacts.
 • Stage E0 MUST NOT mutate chunks or upstream artifacts.
 • Each event_record MUST include:
-  – event_id
-  – media_id
-  – temporal bounds (t0_ms, t1_ms)
-  – event_text
-  – explicit evidence linking (chunk_ids)
+– event_id
+– media_id
+– temporal bounds (t0_ms, t1_ms)
+– event_text
+– explicit evidence linking (chunk_ids)
 • Evidence linkage MUST be complete and internally consistent.
 • Stage E0 MUST emit an explicit outcome record even if no events are produced.
 • Zero-byte events files are prohibited.
@@ -356,12 +381,12 @@ Rules:
 • If events artifacts are absent or invalid, Stage F0 MUST fall back to chunk-scoped extraction.
 • Stage F0 MUST NOT mutate upstream artifacts.
 • Each entity_record MUST include:
-  – entity_id
-  – media_id
-  – scope and scope_id (event or chunk)
-  – span offsets (start_char, end_char) within the referenced text
-  – entity_text and entity_type
-  – explicit evidence linking (at minimum, chunk_ids via scope evidence)
+– entity_id
+– media_id
+– scope and scope_id (event or chunk)
+– span offsets (start_char, end_char) within the referenced text
+– entity_text and entity_type
+– explicit evidence linking (at minimum, chunk_ids via scope evidence)
 • Stage F0 MUST emit an explicit outcome record even if no entities are produced.
 • Zero-byte entities files are prohibited.
 • Contract validation MUST be enforceable via a deterministic checker.
@@ -384,17 +409,17 @@ Rules:
 • Stage F1 MUST operate strictly on existing Stage F0 and optional candidate mention streams, but canonical outputs MUST be produced deterministically.
 • Stage F1 MUST NOT mutate upstream artifacts.
 • Each entity_node MUST include:
-  – entity_node_id
-  – media_id
-  – entity_type
-  – display_name (human-readable)
-  – mention_ids (the supporting mentions)
+– entity_node_id
+– media_id
+– entity_type
+– display_name (human-readable)
+– mention_ids (the supporting mentions)
 • Each entity_mention MUST include:
-  – mention_id
-  – entity_node_id
-  – scope and scope_id (event or chunk)
-  – span offsets and mention text
-  – evidence linking (chunk_ids)
+– mention_id
+– entity_node_id
+– scope and scope_id (event or chunk)
+– span offsets and mention text
+– evidence linking (chunk_ids)
 • Stage F1 MUST emit an explicit outcome record even if no nodes are produced.
 • Zero-byte entity_nodes/entity_mentions files are prohibited.
 • Contract validation MUST be enforceable via a deterministic checker.

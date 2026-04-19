@@ -7,10 +7,11 @@ pydantic-settings==2.7.1
 # Database
 sqlalchemy==2.0.36
 asyncpg==0.30.0
+psycopg2-binary==2.9.10
 alembic==1.14.0
 
-# Task queue
-dramatiq[redis]==1.17.0
+# Task queue (RQ replaces Dramatiq)
+rq==2.3.3
 redis==5.2.1
 
 # Object store
@@ -22,7 +23,7 @@ opencv-python-headless==4.10.0.84
 imagehash==4.3.1
 Pillow==11.1.0
 
-# ASR fallback (CPU-safe)
+# ASR
 faster-whisper==1.1.0
 soundfile==0.12.1
 
@@ -32,6 +33,12 @@ langdetect==1.0.9
 # Shot detection fallback
 scenedetect==0.6.4
 
+# ML / embeddings
+transformers>=4.51.0
+accelerate>=1.4.0
+sentencepiece>=0.2.0
+tokenizers>=0.21.0
+
 # Qdrant
 qdrant-client==1.12.2
 
@@ -39,10 +46,9 @@ qdrant-client==1.12.2
 httpx==0.28.1
 aiofiles==24.1.0
 python-multipart==0.0.20
+numpy>=1.24.0
 
-# ── GPU-only (install on GPU pod, not CPU pod) ──────────────────
-# paddlepaddle-gpu  (install separately: pip install paddlepaddle-gpu)
-# paddleocr==2.8.1
-# nemo_toolkit[asr]
-# pyannote.audio==3.3.2
-# insightface==0.7.3
+# ── GPU-only (installed separately on GPU pod) ──────────────────────────────
+# paddlepaddle-gpu        (pip install paddlepaddle-gpu paddleocr)
+# pyannote.audio==3.3.2   (pip install pyannote.audio)
+# nemo_toolkit[asr]       (optional; we use faster-whisper large-v3 instead)
