@@ -22,8 +22,8 @@ contracts.
 
 ## GPU compute
 
-Development and processing for this pipeline is supported by GPU credits from Runpod, our compute
-sponsor.
+Development and processing for this pipeline is done in collaboration with Runpod, who provide
+GPU credits.
 
 ## Status
 
