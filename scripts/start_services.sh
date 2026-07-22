@@ -3,6 +3,7 @@
 # Safe to run repeatedly — skips already-running services.
 
 set -o pipefail
+export CLAUDE_CONFIG_DIR=/workspace/.claude
 PERSIST=/workspace/.pod-persist
 mkdir -p "$PERSIST/logs"
 

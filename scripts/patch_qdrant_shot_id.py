@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import ast
 import importlib.util
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Iterable, Optional
 
 import psycopg
 from qdrant_client import QdrantClient
@@ -43,69 +42,25 @@ def load_settings_module(settings_path: Path):
     return module
 
 
-def _ast_literal_from_assignment(source: str, name: str) -> Optional[Any]:
-    tree = ast.parse(source)
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == name:
-                    try:
-                        return ast.literal_eval(node.value)
-                    except Exception:
-                        return None
-    return None
+def normalize_postgres_url(url: str) -> str:
+    url = url.strip()
+    if url.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + url[len("postgresql+asyncpg://") :]
+    if url.startswith("postgresql://"):
+        return url
+    raise RuntimeError(f"Unsupported postgres_url format: {url!r}")
 
 
-def dsn_from_mapping(cfg: Dict[str, Any]) -> Optional[str]:
-    host = cfg.get("host") or cfg.get("HOST")
-    port = cfg.get("port") or cfg.get("PORT") or 5432
-    dbname = cfg.get("dbname") or cfg.get("database") or cfg.get("DBNAME") or cfg.get("DATABASE")
-    user = cfg.get("user") or cfg.get("USER")
-    password = cfg.get("password") or cfg.get("PASSWORD")
+def extract_postgres_dsn(settings_module) -> str:
+    settings_obj = getattr(settings_module, "settings", None)
+    if settings_obj is None:
+        raise RuntimeError("settings.py does not expose a `settings = Settings()` object")
 
-    if host and dbname and user is not None and password is not None:
-        return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-    return None
+    postgres_url = getattr(settings_obj, "postgres_url", None)
+    if not isinstance(postgres_url, str) or not postgres_url.strip():
+        raise RuntimeError("settings.postgres_url missing or empty")
 
-
-def extract_postgres_dsn(settings_module, settings_path: Path) -> str:
-    candidate_names = [
-        "POSTGRES_DSN",
-        "DATABASE_URL",
-        "PG_DSN",
-        "SQLALCHEMY_DATABASE_URI",
-        "DB_DSN",
-    ]
-    for name in candidate_names:
-        value = getattr(settings_module, name, None)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    dict_names = ["DB_CONFIG", "POSTGRES", "DATABASE", "PG"]
-    for name in dict_names:
-        value = getattr(settings_module, name, None)
-        if isinstance(value, dict):
-            dsn = dsn_from_mapping(value)
-            if dsn:
-                return dsn
-
-    source = settings_path.read_text(encoding="utf-8")
-    for name in candidate_names:
-        value = _ast_literal_from_assignment(source, name)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    for name in dict_names:
-        value = _ast_literal_from_assignment(source, name)
-        if isinstance(value, dict):
-            dsn = dsn_from_mapping(value)
-            if dsn:
-                return dsn
-
-    raise RuntimeError(
-        "Could not find a Postgres connection string in settings.py. "
-        "Looked for common DSN variables and DB config dicts."
-    )
+    return normalize_postgres_url(postgres_url)
 
 
 def resolve_shot_id_for_turn(cur: psycopg.Cursor[Any], turn_id: str) -> Optional[str]:
@@ -217,12 +172,13 @@ def patch_collection(client: QdrantClient, pg_conn: psycopg.Connection[Any], col
 
 def main() -> int:
     settings_module = load_settings_module(SETTINGS_PATH)
-    postgres_dsn = extract_postgres_dsn(settings_module, SETTINGS_PATH)
+    postgres_dsn = extract_postgres_dsn(settings_module)
     client = QdrantClient(url=QDRANT_URL)
 
     total = PatchStats()
 
     print(f"Using settings: {SETTINGS_PATH}")
+    print(f"Using Postgres DSN: {postgres_dsn}")
     print(f"Using Qdrant: {QDRANT_URL}")
     print("Target collections:", ", ".join(TARGET_COLLECTIONS))
 
