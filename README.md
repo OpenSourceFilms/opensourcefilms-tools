@@ -29,3 +29,13 @@ Development and processing for this pipeline is supported by GPU credits from
 
 Active development, in step with an ongoing film production. Interfaces and stage boundaries may
 change without notice.
+
+## License
+
+Code in this repository that is our own work is released under the [MIT License](LICENSE) —
+free for any use, including commercial, with attribution.
+
+This pipeline depends on and integrates with third-party libraries, models, and tools, each under
+their own license terms (some permissive, some more restrictive). Those third-party components are
+**not** relicensed by this repository — see their own upstream projects for terms. A
+third-party notice file will be added here as that audit completes.
