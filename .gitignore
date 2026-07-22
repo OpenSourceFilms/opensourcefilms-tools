@@ -67,3 +67,8 @@ bin/2n
 
 # RTFM local database
 .rtfm/
+
+# Secrets / local env
+.env
+.env.*
+.mcp.json
