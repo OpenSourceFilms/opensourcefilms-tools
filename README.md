@@ -1,5 +1,11 @@
 # Open Source Films: Filmmaking Tools
 
+> **Note:** this repository holds an earlier generation of Open Source Films' media-retrieval
+> pipeline. Current development and the more complete public architecture live in
+> [opensourcefilms-erf](https://github.com/OpenSourceFilms/opensourcefilms-erf). This repo is kept
+> public for its development lineage and for code not yet carried over, not as the canonical entry
+> point.
+
 Tools built to support an independent feature film made without industry backing.
 Its behind-the-scenes footage is part of the film's story, which means the production itself
 generates a large, continuously growing body of raw media that needs to become searchable and
