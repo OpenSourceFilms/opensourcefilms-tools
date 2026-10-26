@@ -13,6 +13,16 @@ production footage into searchable, structured artifacts:
 - vector embeddings + a search API over the resulting corpus
 - a synthetic-query layer for natural-language lookups against the archive
 
+## Why this archive is still public
+
+We are deliberately retaining this repository **public and unarchived for engineering reference**, not as an actively maintained or deployable edition of ERF. Its independently useful historical material includes:
+
+- The earlier [FastAPI service and routes](api/) for projects, assets, search, queue status and character enrichment.
+- The [Redis Queue and Dramatiq worker configurations](workers/), illustrating previous asynchronous-ingest designs and their transition.
+- The [ingest-stage prototypes](ingest/) for transcription, keyframes, visual enrichment, OCR, embeddings and query synthesis, plus historical artifact contracts in the root documentation.
+
+These are **comparative implementation examples**, not endorsed startup instructions. The contemporary public entry point is [opensourcefilms-erf](https://github.com/OpenSourceFilms/opensourcefilms-erf). Historical security warnings and disabled startup entrypoints below still apply.
+
 **Historical, superseded project snapshot (October 2026).** This code is
 retained as an engineering reference, not an active installation guide or
 deployable release. The current public editorial-retrieval work is maintained
