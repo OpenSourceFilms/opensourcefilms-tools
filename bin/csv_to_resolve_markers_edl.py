@@ -75,28 +75,41 @@ def main():
     out.append("")
 
     event = 1
+    edl_fps = None  # One CMX EDL has one non-drop timecode basis.
     for row in rows:
         tc_in = (row.get("Timecode In") or "").strip()
         name = (row.get("Name") or "").strip()
         comment = (row.get("Comment") or "").strip()
 
         fps = args.fps_default
-        m = re.search(r"\bfps=([0-9]+(?:\.[0-9]+)?)\b", comment)
-        if m:
+        matches = re.findall(r"\bfps=([0-9]+(?:\.[0-9]+)?)\b", comment)
+        if len(matches) > 1:
+            raise ValueError(f"row {event}: multiple fps annotations are ambiguous")
+        if matches:
             # CMX non-drop HH:MM:SS:FF uses integer frames-per-second.
             # A decimal here previously truncated, e.g. 23.976 became 23.
-            if "." in m.group(1):
+            if "." in matches[0]:
                 raise ValueError(
-                    f"row {event}: fractional fps={m.group(1)} is unsupported "
+                    f"row {event}: fractional fps={matches[0]} is unsupported "
                     "by this integer non-drop-frame exporter"
                 )
-            fps = int(m.group(1))
+            fps = int(matches[0])
 
         in_tc = parse_tc(tc_in)
         try:
             validate_non_drop_timecode(in_tc, fps)
         except ValueError as exc:
             raise ValueError(f"row {event}: {exc}") from exc
+        # A single CMX3600 EDL does not encode a separate integer timebase
+        # for each event. Mixing rows would yield different frame arithmetic
+        # under one FCM: NON-DROP FRAME header, shifting edit locations.
+        if edl_fps is None:
+            edl_fps = fps
+        elif fps != edl_fps:
+            raise ValueError(
+                f"row {event}: fps={fps} disagrees with EDL timebase "
+                f"{edl_fps} fps; export one frame rate per EDL"
+            )
         out_tc = add_frames(in_tc, args.marker_len_frames, fps)
 
         reel = edl_reel(name.split("|",1)[-1] if "|" in name else name)
