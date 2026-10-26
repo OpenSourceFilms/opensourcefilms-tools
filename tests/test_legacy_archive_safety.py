@@ -57,6 +57,20 @@ class PublicArchiveSafety(unittest.TestCase):
         self.assertIn("exit code 78", security)
         self.assertIn("not a supported service", " ".join(security.split()))
 
+    def test_historical_third_party_notice_present(self):
+        notice = (ROOT / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        wrapper = (ROOT / "bin/whispercpp").read_text(encoding="utf-8")
+        self.assertIn("THIRD_PARTY_LICENSES.md", readme)
+        self.assertIn("bin/silence.wav", notice)
+        self.assertIn("intfloat/e5-small-v2", notice)
+        self.assertIn("insightface/buffalo_l", notice)
+        self.assertIn("transnetv2_pytorch", notice)
+        self.assertIn("GGML", notice)
+        self.assertIn("whisper-cli", wrapper)
+        self.assertTrue(wrapper.startswith("#!/usr/bin/env bash"))
+        self.assertNotIn("third-party notice file will be added", readme.lower())
+
     def test_security_document_covers_all_disabled_entrypoints(self):
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
         for item in ENTRYPOINTS:
