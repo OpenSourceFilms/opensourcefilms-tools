@@ -8,6 +8,7 @@ on:
       - "THIRD_PARTY_LICENSES.md"
       - "scripts/generate_silence_fixture.py"
       - "bin/silence.wav"
+      - "bin/csv_to_resolve_markers_edl.py"
       - "config/settings.py"
       - "scripts/setup_infrastructure.sh"
       - "scripts/setup_phase1.sh"
@@ -32,3 +33,5 @@ jobs:
           python-version: "3.11"
       - name: Verify no insecure legacy bootstrap can run accidentally
         run: python -B -m unittest discover -s tests -p 'test_legacy_archive_safety.py' -v
+      - name: Verify synthetic Resolve marker timecode boundaries
+        run: python -B -m unittest discover -s tests -p 'test_resolve_markers_edl.py' -v

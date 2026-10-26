@@ -8,7 +8,16 @@ def parse_tc(tc: str):
         raise ValueError(f"bad timecode: {tc}")
     return tuple(int(x) for x in m.groups())
 
+def validate_non_drop_timecode(tc, fps):
+    """Reject timecodes that would silently wrap at the given integer FPS."""
+    if not 1 <= fps <= 60:
+        raise ValueError(f"non-drop EDL requires integer fps in 1..60, got {fps}")
+    if not 0 <= tc[3] < fps:
+        raise ValueError(f"frame field {tc[3]:02d} outside 00..{fps - 1:02d} at {fps} fps")
+
+
 def add_frames(tc, add_ff, fps):
+    validate_non_drop_timecode(tc, fps)
     hh, mm, ss, ff = tc
     total = (((hh*60 + mm)*60 + ss) * fps) + ff
     total += add_ff
@@ -49,6 +58,10 @@ def main():
     ap.add_argument("--fps_default", type=int, default=30)
     ap.add_argument("--title", default="MEDIA_INTEL_MARKERS")
     args = ap.parse_args()
+    if not 1 <= args.fps_default <= 60:
+        ap.error("--fps_default must be an integer from 1 to 60 (non-drop-frame EDL)")
+    if args.marker_len_frames <= 0:
+        ap.error("--marker_len_frames must be positive")
 
     rows = []
     with open(args.in_csv, "r", encoding="utf-8") as f:
@@ -68,11 +81,22 @@ def main():
         comment = (row.get("Comment") or "").strip()
 
         fps = args.fps_default
-        m = re.search(r"\bfps=(\d+)\b", comment)
+        m = re.search(r"\bfps=([0-9]+(?:\.[0-9]+)?)\b", comment)
         if m:
+            # CMX non-drop HH:MM:SS:FF uses integer frames-per-second.
+            # A decimal here previously truncated, e.g. 23.976 became 23.
+            if "." in m.group(1):
+                raise ValueError(
+                    f"row {event}: fractional fps={m.group(1)} is unsupported "
+                    "by this integer non-drop-frame exporter"
+                )
             fps = int(m.group(1))
 
         in_tc = parse_tc(tc_in)
+        try:
+            validate_non_drop_timecode(in_tc, fps)
+        except ValueError as exc:
+            raise ValueError(f"row {event}: {exc}") from exc
         out_tc = add_frames(in_tc, args.marker_len_frames, fps)
 
         reel = edl_reel(name.split("|",1)[-1] if "|" in name else name)
