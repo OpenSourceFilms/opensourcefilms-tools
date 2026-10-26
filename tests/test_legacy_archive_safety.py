@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 import subprocess
+import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +57,16 @@ class PublicArchiveSafety(unittest.TestCase):
         self.assertIn("Do not deploy", readme)
         self.assertIn("exit code 78", security)
         self.assertIn("not a supported service", " ".join(security.split()))
+
+    def test_silence_fixture_is_reproducible(self):
+        script = ROOT / "scripts/generate_silence_fixture.py"
+        self.assertTrue(script.is_file())
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=ROOT, capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Verified reproducible PCM silence", proc.stdout)
 
     def test_historical_third_party_notice_present(self):
         notice = (ROOT / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")

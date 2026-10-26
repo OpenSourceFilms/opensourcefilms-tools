@@ -60,7 +60,8 @@ their own licence terms (some permissive, some more restrictive). Those third-pa
 **not** relicensed by this repository. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
 for verified upstream source licences and specific unresolved model/fixture rights.
 The historical shell wrapper `bin/whispercpp` is OSF-authored, **not**
-a redistribution of upstream whisper.cpp. The standalone
-`bin/silence.wav` sample still needs independent provenance verification;
-this is documented in the notice. No full deployment or bundled model
+a redistribution of upstream whisper.cpp. The historical `bin/silence.wav` file is now independently reproducible
+byte-for-byte from one second of generated digital silence via
+`scripts/generate_silence_fixture.py`; see the notice for exact hashes
+and limits of that evidence. No full deployment or bundled model
 is cleared by the presence of an MIT licence here.

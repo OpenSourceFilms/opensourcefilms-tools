@@ -53,15 +53,27 @@ may have non-commercial restrictions despite permissive source libraries.
   components. This list is not exhaustive; check their actual releases
   before building or distributing a combined system.
 
-## One bundled media fixture awaiting provenance
+## Reproducibly verified synthetic WAV fixture
 
-The tree includes `bin/silence.wav` (32,044 bytes). Its original
-generation method, embedded metadata and chain of title have **not**
-been independently established by this review. It is a small historical
-audio fixture, **not** a pretrained model or an assertion of third-party
-licensing permission. Anyone redistributing the complete archive should
-confirm its provenance or replace it with a freshly generated, documented
-synthetic silence fixture. The file has been left untouched here.
+The tracked `bin/silence.wav` (32,044 bytes) is **one second of
+16,000-Hz mono 16-bit little-endian PCM digital silence**. It contains
+a standard 44-byte RIFF/WAVE header and 32,000 payload bytes, **all zero**;
+there are no extra chunks or embedded metadata.
+
+On 26 October 2026 the original Git blob was independently decoded and
+examined byte-by-byte. A fresh WAV generated exclusively with Python's
+standard-library `wave` and zero-filled bytes produced an **identical
+Git blob SHA-1** (`3f1a79e7e4dab5becbac15d0e10360e6d77ed322`) and
+SHA-256 (`643f8a8dc8bd9c19225afffad2becfec5426180b3749cb208abdf1a6c8354efc`).
+To reproduce and non-destructively verify the current file, run
+`python scripts/generate_silence_fixture.py`. Only an explicit `--write`
+will restore the deterministic bytes. GitHub Actions checks this property.
+
+This establishes **independent, byte-identical reproduction from trivial
+digital silence** without any source recording or third-party software
+beyond the Python standard library. It does **not** identify the author
+of the historical commit or make any claim about other archive assets.
+The tracked WAV has not been replaced, and no other rights are asserted.
 
 ## Redistribution and security boundaries
 
