@@ -37,6 +37,16 @@ solely to document earlier development. See [SECURITY.md](SECURITY.md).
 If you reuse ideas or code, design a separate, authenticated deployment
 and evaluate all current upstream licences and security requirements.
 
+The historical `bin/csv_to_resolve_markers_edl.py` utility remains usable for
+synthetic or operator-supplied Resolve marker exports. It supports **integer
+non-drop-frame rates of 1 to 60 fps**. A marker whose frame field is outside
+`00..fps-1`, a zero/negative marker duration, or a fractional `fps=...`
+annotation fails rather than silently shifting the edit point. No claim is
+made about fractional-rate or drop-frame EDL support. Validate the resulting
+timeline against the target Resolve project before using it editorially.
+Offline regressions: `python3 -B -m unittest discover -s tests -p
+'test_resolve_markers_edl.py' -v`.
+
 See `MASTER.md` for the canonical spec (stage responsibilities, invariants, execution rules) and
 `PIPELINE_WRITE_AND_INTERACTION_MAP.md` / `METADATA_TAGS_AND_FLAGS_CONTRACT.md` for the artifact
 contracts.
