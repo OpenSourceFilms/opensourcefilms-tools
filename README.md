@@ -56,6 +56,11 @@ Code in this repository that is our own work is released under the [MIT License]
 for any use, including commercial, with attribution.
 
 This pipeline depends on and integrates with third-party libraries, models, and tools, each under
-their own license terms (some permissive, some more restrictive). Those third-party components are
-**not** relicensed by this repository. See their own upstream projects for terms. A
-third-party notice file will be added here as that audit completes.
+their own licence terms (some permissive, some more restrictive). Those third-party components are
+**not** relicensed by this repository. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
+for verified upstream source licences and specific unresolved model/fixture rights.
+The historical shell wrapper `bin/whispercpp` is OSF-authored, **not**
+a redistribution of upstream whisper.cpp. The standalone
+`bin/silence.wav` sample still needs independent provenance verification;
+this is documented in the notice. No full deployment or bundled model
+is cleared by the presence of an MIT licence here.
