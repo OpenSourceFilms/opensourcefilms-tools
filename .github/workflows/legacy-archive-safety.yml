@@ -5,6 +5,7 @@ on:
     paths:
       - "README.md"
       - "SECURITY.md"
+      - "THIRD_PARTY_LICENSES.md"
       - "config/settings.py"
       - "scripts/setup_infrastructure.sh"
       - "scripts/setup_phase1.sh"
