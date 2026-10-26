@@ -41,9 +41,15 @@ The historical `bin/csv_to_resolve_markers_edl.py` utility remains usable for
 synthetic or operator-supplied Resolve marker exports. It supports **integer
 non-drop-frame rates of 1 to 60 fps**. A marker whose frame field is outside
 `00..fps-1`, a zero/negative marker duration, or a fractional `fps=...`
-annotation fails rather than silently shifting the edit point. No claim is
-made about fractional-rate or drop-frame EDL support. Validate the resulting
-timeline against the target Resolve project before using it editorially.
+annotation fails rather than silently shifting the edit point. All rows in
+a single export must resolve to **the same integer FPS**: a consistent
+`fps=24` override is supported even if `--fps_default` differs, but a
+later 25 fps or unannotated row reverting to a different default will
+fail before writing an EDL. Repeated `fps=` annotations in one row are
+also rejected. These checks prevent mixed timebases under one
+`FCM: NON-DROP FRAME` header. No claim is made about fractional-rate,
+mixed-rate, or drop-frame EDL support. Validate the resulting timeline
+against the target Resolve project before using it editorially.
 Offline regressions: `python3 -B -m unittest discover -s tests -p
 'test_resolve_markers_edl.py' -v`.
 

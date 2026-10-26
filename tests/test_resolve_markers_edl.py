@@ -68,6 +68,59 @@ class ResolveMarkerEdlTests(unittest.TestCase):
         self.assertIn("row 2", out.stderr)
         self.assertEqual(self.edl_path.read_bytes(), b"existing user EDL")
 
+    def test_mixed_explicit_row_rates_are_rejected_without_output(self):
+        result = self.run_converter([
+            self.marker("00:00:05:23", comment="fps=24"),
+            self.marker("00:00:06:24", comment="fps=25"),
+        ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("row 2", result.stderr)
+        self.assertIn("EDL timebase 24 fps", result.stderr)
+        self.assertFalse(self.edl_path.exists())
+
+    def test_first_row_override_followed_by_default_rate_is_rejected(self):
+        # The absence of an annotation means fps_default=30, not the rate
+        # from the previous row. Otherwise timecodes are silently ambiguous.
+        result = self.run_converter([
+            self.marker("00:00:05:23", comment="fps=24"),
+            self.marker("00:00:06:24", comment="no rate annotation"),
+        ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("row 2", result.stderr)
+        self.assertIn("fps=30 disagrees", result.stderr)
+        self.assertFalse(self.edl_path.exists())
+
+    def test_consistent_explicit_row_rates_work_when_different_from_default(self):
+        result = self.run_converter([
+            self.marker("00:00:05:23", comment="fps=24"),
+            self.marker("00:00:06:23", comment="fps=24"),
+        ], "--marker_len_frames", "2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = self.edl_path.read_text(encoding="utf-8")
+        self.assertIn("00:00:05:23 00:00:06:01", text)
+        self.assertIn("00:00:06:23 00:00:07:01", text)
+        self.assertEqual(text.count(" V     C "), 2)
+
+    def test_conflicting_rate_does_not_overwrite_previous_export(self):
+        self.edl_path.write_bytes(b"previously-approved-editorial-markers")
+        result = self.run_converter([
+            self.marker("00:00:05:00", comment="fps=25"),
+            self.marker("00:00:06:00", comment="fps=24"),
+        ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("EDL timebase 25 fps", result.stderr)
+        self.assertEqual(
+            self.edl_path.read_bytes(), b"previously-approved-editorial-markers"
+        )
+
+    def test_multiple_rate_annotations_in_one_row_are_rejected(self):
+        result = self.run_converter([
+            self.marker("00:00:05:00", comment="fps=24 footage; fps=25 timeline"),
+        ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("multiple fps annotations", result.stderr)
+        self.assertFalse(self.edl_path.exists())
+
     def test_zero_and_unsupported_fps_are_rejected(self):
         for comment, flags in [
             ("", ("--fps_default", "0")),
