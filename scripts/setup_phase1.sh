@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# PUBLIC ARCHIVE SAFETY GATE: this historical installer/server is not maintained.
+# Do not remove this guard and deploy directly. See README.md and SECURITY.md.
+printf '%s\n' 'REFUSED: legacy OSF pipeline bootstrap is archived and unsafe to deploy. See SECURITY.md.' >&2
+exit 78
+
 # Phase 1 setup: install services, deps, GPU models, run migrations
 # Run on a fresh B200 pod. Safe to re-run.
 set -o pipefail

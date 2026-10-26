@@ -10,15 +10,17 @@ class Settings(BaseSettings):
     )
 
     # Database
-    postgres_url: str = "postgresql+asyncpg://media:media@localhost:5432/media_evidence"
+    # Required externally; a historical weak database password must not be reused.
+    postgres_url: str
 
     # Queue
     redis_url: str = "redis://localhost:6379/0"
 
     # Object store
     minio_endpoint: str = "localhost:9000"
-    minio_access_key: str = "minioadmin"
-    minio_secret_key: str = "minioadmin"
+    # Required externally; no default object-store credentials.
+    minio_access_key: str
+    minio_secret_key: str
     minio_use_ssl: bool = False
 
     # Model paths

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# PUBLIC ARCHIVE SAFETY GATE: this historical installer/server is not maintained.
+# Do not remove this guard and deploy directly. See README.md and SECURITY.md.
+printf '%s\n' 'REFUSED: legacy OSF pipeline bootstrap is archived and unsafe to deploy. See SECURITY.md.' >&2
+exit 78
+
 # Start all services on pod wake-up.
 # Safe to run repeatedly — skips already-running services.
 
